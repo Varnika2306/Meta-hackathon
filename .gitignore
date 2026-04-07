@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+
+# Environments
+.env
+.env.test
+.env.example
+venv/
+ENV/
+
+# Project specifics
+.gemini/
+out.txt
+gemini_out.txt
+gemini_final_out.txt
+clean_out.txt
+test_api.py
+test_smoke.py
+
+# Logs
+*.log
