@@ -20,7 +20,8 @@ import httpx
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3-8b-8192")
-API_KEY = os.getenv("HF_TOKEN")  # Groq API key stored as HF_TOKEN
+# Accept OPENAI_API_KEY (spec requirement) or HF_TOKEN (Groq/HF Space convention)
+API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
 
@@ -219,7 +220,7 @@ async def main() -> None:
     """Run agent against environment"""
     
     if not API_KEY:
-        print("[ERROR] HF_TOKEN (Groq API key) not set", flush=True)
+        print("[ERROR] API key not set. Provide OPENAI_API_KEY or HF_TOKEN.", flush=True)
         sys.exit(1)
     
     # Initialize clients

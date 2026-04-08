@@ -1,0 +1,70 @@
+spec_version: 1
+name: lexenv
+description: >
+  LexEnv is an RL environment where an AI agent learns to analyze legal
+  documents — identifying risky clauses, flagging issues, and assessing risk —
+  simulating the work of a junior legal associate.
+app: server.app:app
+port: 8000
+tags:
+  - openenv
+  - legal
+  - nlp
+  - reinforcement-learning
+
+tasks:
+  - id: clause_id
+    name: NDA Clause Identification
+    difficulty: easy
+    max_steps: 3
+    description: >
+      Agent reads a Non-Disclosure Agreement and flags risky clauses:
+      overbroad non-compete (5yr worldwide), blanket IP assignment,
+      perpetual term, Cayman Islands jurisdiction.
+
+  - id: sla_review
+    name: SLA Contract Review
+    difficulty: medium
+    max_steps: 4
+    description: >
+      Agent reviews a Service Level Agreement with 8 planted defects:
+      no numeric uptime SLA, $500 liability cap, undefined incident timelines,
+      asymmetric termination, no breach notification window.
+
+  - id: ma_assessment
+    name: M&A Due Diligence Risk Assessment
+    difficulty: hard
+    max_steps: 5
+    description: >
+      Agent analyzes a merger agreement excerpt with 10 multi-layered risks:
+      undisclosed tax audits, $2.3M hidden liability, overbroad MAE carve-outs,
+      no reverse termination fee, asymmetric 18-month exclusivity,
+      5% indemnification cap.
+
+observation_space:
+  type: object
+  fields:
+    task_id: string
+    task_name: string
+    difficulty: integer
+    contract_excerpt: string
+    instruction: string
+    step: integer
+    max_steps: integer
+    previous_analysis: string
+    progress: object
+
+action_space:
+  type: object
+  fields:
+    analysis: string
+    flags: array
+    risk_assessment: "enum: low | medium | high | critical"
+
+reward:
+  type: float
+  range: [0.0, 1.0]
+  description: >
+    Per-step partial reward proportional to issues identified. Shaped over
+    full trajectory with efficiency bonus, risk-match bonus, and quality
+    penalty for short analyses.

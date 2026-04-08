@@ -155,11 +155,16 @@ async def get_state():
 
 
 # ============================================================================
-# Entry-point (for direct `python server/app.py` invocation)
+# Entry-points
 # ============================================================================
 
-if __name__ == "__main__":
+def main():
+    """Entry-point for `server` console script declared in pyproject.toml."""
     import uvicorn
 
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run("server.app:app", host="0.0.0.0", port=port, reload=False)
+
+
+if __name__ == "__main__":
+    main()
