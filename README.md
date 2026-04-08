@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # LexEnv — AI Legal Document Analysis Environment
 
 An [OpenEnv](https://openenv.dev)-compliant reinforcement learning environment where an AI agent learns to analyze legal contracts — identifying risky clauses, flagging issues, and assessing risk — simulating the work of a junior legal associate.
@@ -221,3 +222,15 @@ git push space main
 ```
 
 The Space is tagged `openenv` for discoverability.
+=======
+---
+title: Lexenv
+emoji: 🌖
+colorFrom: purple
+colorTo: gray
+sdk: docker
+pinned: false
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+>>>>>>> 32a30d5df7fd7d00dae5fb608258e8edec60a4b3
