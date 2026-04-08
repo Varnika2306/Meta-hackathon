@@ -1,19 +1,16 @@
 """
-Inference agent for LexEnv using Google Gemini API.
+Inference Script for LexEnv Custom Benchmark
+===================================
+MANDATORY VARIABLES:
+    API_BASE_URL     The API endpoint for the LLM.
+    MODEL_NAME       The model identifier to use for inference.
+    HF_TOKEN         Your Hugging Face / API key.
+    LOCAL_IMAGE_NAME The name of the local image to use for the environment.
 
-Runs a baseline legal-analysis agent against the LexEnv environment.
-Uses Gemini 1.5 Flash to analyze contracts and report structured
-[START]/[STEP]/[END] logs.
-
-Configuration via environment variables:
-    GOOGLE_API_KEY — your Gemini API key (required)
-    MODEL_NAME     — default: gemini-1.5-flash
-    LEXENV_TASK    — task to run: clause_id | sla_review | ma_due_diligence
-    LEXENV_HOST    — server URL, default: http://127.0.0.1:8000
-
-Usage:
-    export GOOGLE_API_KEY=AIzaSy...
-    python inference.py
+STDOUT FORMAT:
+    [START] task=<task_name> env=<benchmark> model=<model_name>
+    [STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+    [END] success=<true|false> steps=<n> score=<0.00> rewards=<r1,r2,...,rn>
 """
 
 import json
@@ -24,75 +21,66 @@ import textwrap
 import time
 from typing import List, Optional
 
-import google.generativeai as genai
+from openai import OpenAI
 import requests
 
 # ---------------------------------------------------------------------------
-# Config
+# Mandatory Environment Variables
 # ---------------------------------------------------------------------------
 
-# Look for various env var names common in different setups
-_google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-_hf_token = os.getenv("HF_TOKEN")
+API_KEY = os.getenv("HF_TOKEN")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
-# Avoid using a Groq key (starts with gsk_) for Gemini calls
-if _hf_token and _hf_token.startswith("gsk_"):
-    _hf_token = None
+# ---------------------------------------------------------------------------
+# LexEnv Configuration
+# ---------------------------------------------------------------------------
 
-API_KEY = _google_key or _hf_token
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3.1-flash")
 LEXENV_HOST = os.getenv("LEXENV_HOST", "http://127.0.0.1:8000")
-MAX_STEPS = 5
-
+BENCHMARK = os.getenv("BENCHMARK", "lexenv")
 TASKS = os.getenv("LEXENV_TASK", "clause_id,sla_review,ma_due_diligence").split(",")
 
 # ---------------------------------------------------------------------------
-# Logging helpers (OpenEnv convention)
+# Logging Requirements
 # ---------------------------------------------------------------------------
-
 
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
-def log_step(
-    step: int, action: str, reward: float, done: bool, error: Optional[str]
-) -> None:
-    err = error if error else "null"
-    # Truncate action for clean logs
-    action_preview = action[:80].replace("\n", " ")
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    
+    # Ensure no newlines in action string
+    action_clean = action.replace("\n", " ").replace("\r", " ")
+    
     print(
-        f"[STEP] step={step} action={action_preview!r} "
-        f"reward={reward:.2f} done={str(done).lower()} error={err}",
+        f"[STEP] step={step} action={action_clean} reward={reward:.2f} done={done_val} error={error_val}",
         flush=True,
     )
 
 
-def log_end(
-    success: bool, steps: int, score: float, rewards: List[float]
-) -> None:
-    rr = ",".join(f"{r:.2f}" for r in rewards)
-    print(
-        f"[END] success={str(success).lower()} steps={steps} "
-        f"score={score:.3f} rewards={rr}",
-        flush=True,
-    )
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 
 # ---------------------------------------------------------------------------
-# LLM interaction
+# LLM Interaction
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = textwrap.dedent("""\
     You are a senior legal analyst. Your task is to carefully analyze
-    legal contracts and identify ALL risky, problematic, or unusual
-    clauses. For each issue you find:
+    legal contracts and identify ALL risky, problematic, or unusual clauses.
+    For each issue you find:
 
     1. Explain WHY it is problematic
     2. Reference the specific contract language
     3. Assess the risk level
 
-    You MUST respond in the following JSON format:
+    You MUST respond in the following JSON format ONLY — no extra text:
     {
         "analysis": "Your detailed analysis text here...",
         "flags": ["issue_id_1", "issue_id_2"],
@@ -121,8 +109,7 @@ def build_user_message(obs_data: dict) -> str:
 
 def parse_llm_response(content: str) -> dict:
     """Parse the LLM response into action fields."""
-    # Try to extract JSON from the response
-    json_match = re.search(r"\{[^{}]*\}", content, re.DOTALL)
+    json_match = re.search(r"\{.*\}", content, re.DOTALL)
     if json_match:
         try:
             data = json.loads(json_match.group())
@@ -134,7 +121,6 @@ def parse_llm_response(content: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    # Fallback: treat entire response as analysis
     return {
         "analysis": content,
         "flags": [],
@@ -142,13 +128,30 @@ def parse_llm_response(content: str) -> dict:
     }
 
 
+def call_openai_client(client: OpenAI, user_message: str) -> str:
+    """Make a single chat completion call using OpenAI wrapper."""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.2,
+            max_tokens=1024,
+            stream=False,
+        )
+        return response.choices[0].message.content or ""
+    except Exception as exc:
+        print(f"[DEBUG] Model request failed: {exc}", flush=True)
+        return ""
+
+
 # ---------------------------------------------------------------------------
 # Environment client (direct HTTP)
 # ---------------------------------------------------------------------------
 
-
 def env_reset(base_url: str, task_id: str) -> dict:
-    """Reset the environment via HTTP POST."""
     resp = requests.post(
         f"{base_url}/reset",
         json={"task_id": task_id},
@@ -159,10 +162,6 @@ def env_reset(base_url: str, task_id: str) -> dict:
 
 
 def env_step(base_url: str, action: dict, task_id: str) -> dict:
-    """Step the environment via HTTP POST.
-    
-    Includes task_id to support the stateless fix for REST calls.
-    """
     resp = requests.post(
         f"{base_url}/step",
         json={"action": action, "task_id": task_id},
@@ -173,98 +172,74 @@ def env_step(base_url: str, action: dict, task_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Main Routine
 # ---------------------------------------------------------------------------
 
-
-def run_task(model: genai.GenerativeModel, base_url: str, task_id: str) -> float:
-    """Run a single task and return the final score."""
-    log_start(task_id, "lexenv", MODEL_NAME)
+def run_task(client: OpenAI, base_url: str, task_id: str) -> float:
+    """Run a single task with ONE LLM call and return the final score."""
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     rewards: List[float] = []
     done = False
-    obs_data = {}
+    score = 0.0
+    steps_taken = 0
 
     try:
-        # Reset environment
         reset_resp = env_reset(base_url, task_id)
         obs_data = reset_resp.get("observation", reset_resp)
 
-        for step in range(1, MAX_STEPS + 1):
-            if done:
-                break
+        user_msg = build_user_message(obs_data)
+        llm_content = call_openai_client(client, user_msg)
 
-            # Ask LLM to analyze the contract
-            user_msg = build_user_message(obs_data)
-            
-            # Gemini generation
-            prompt = f"{SYSTEM_PROMPT}\n\n{user_msg}"
-            response = model.generate_content(prompt)
-            llm_content = response.text or ""
-            
-            # Parse response → action
-            action = parse_llm_response(llm_content)
+        action_dict = parse_llm_response(llm_content)
+        
+        step_resp = env_step(base_url, action_dict, task_id)
+        obs_data = step_resp.get("observation", step_resp)
 
-            # Step environment
-            step_resp = env_step(base_url, action, task_id)
-            obs_data = step_resp.get("observation", step_resp)
+        reward = float(step_resp.get("reward", obs_data.get("reward", 0.0)) or 0.0)
+        done = bool(step_resp.get("done", obs_data.get("done", True)))
 
-            reward = step_resp.get("reward", obs_data.get("reward", 0.0)) or 0.0
-            done = step_resp.get("done", obs_data.get("done", False))
-
-            rewards.append(reward)
-            log_step(step, action["analysis"], reward, done, None)
-            
-            # Small delay for rate limiting if needed
-            time.sleep(1)
+        rewards.append(reward)
+        steps_taken = 1
+        
+        # We output the JSON analysis as the "action_str"
+        action_repr = json.dumps(action_dict)
+        
+        log_step(step=1, action=action_repr, reward=reward, done=done, error=None)
 
     except Exception as e:
-        log_step(len(rewards) + 1, "ERROR", 0.0, True, str(e))
+        print(f"[DEBUG] env error: {e}", flush=True)
+        log_step(step=steps_taken + 1, action="ERROR", reward=0.0, done=True, error=str(e))
         done = True
 
     score = sum(rewards) / max(len(rewards), 1)
-    log_end(score >= 0.5, len(rewards), score, rewards)
+    # The user template requires boolean success condition
+    # For lexenv, let's say >= 0.5 is success
+    success = score >= 0.5
+    
+    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
     return score
 
 
 def main():
-    """Run inference across all configured tasks."""
     if not API_KEY:
-        print(
-            "ERROR: No API key found. Set the GOOGLE_API_KEY environment variable.",
-            file=sys.stderr,
-        )
+        print("ERROR: No API_KEY / HF_TOKEN found in environment.", file=sys.stderr)
         sys.exit(1)
 
-    genai.configure(api_key=API_KEY)
-    # Using the flash model as requested
-    model = genai.GenerativeModel(MODEL_NAME)
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
-    print(f"{'='*60}")
-    print(f"LexEnv Inference Agent (Gemini)")
-    print(f"Model: {MODEL_NAME}")
-    print(f"Host:  {LEXENV_HOST}")
-    print(f"Tasks: {TASKS}")
-    print(f"{'='*60}\n")
-
+    print(f"[DEBUG] LexEnv Inference Agent using OpenAI Client")
+    print(f"[DEBUG] Base URL: {API_BASE_URL}")
+    print(f"[DEBUG] Model: {MODEL_NAME}")
+    
     scores = {}
     for task_id in TASKS:
         task_id = task_id.strip()
         if not task_id:
             continue
-        print(f"\n--- Running task: {task_id} ---\n")
-        score = run_task(model, LEXENV_HOST, task_id)
+        score = run_task(client, LEXENV_HOST, task_id)
         scores[task_id] = score
-        print(f"\n  Score for {task_id}: {score:.3f}\n")
-
-    print(f"\n{'='*60}")
-    print("FINAL RESULTS")
-    print(f"{'='*60}")
-    for task_id, score in scores.items():
-        print(f"  {task_id:25s}  ->  {score:.3f}")
-    avg = sum(scores.values()) / max(len(scores), 1)
-    print(f"  {'AVERAGE':25s}  ->  {avg:.3f}")
-    print(f"{'='*60}")
+        time.sleep(2)
 
 
 if __name__ == "__main__":
