@@ -1,4 +1,14 @@
-<<<<<<< HEAD
+---
+title: Lexenv
+emoji: ⚖️
+colorFrom: purple
+colorTo: gray
+sdk: docker
+pinned: false
+tags:
+  - openenv
+---
+
 # LexEnv — AI Legal Document Analysis Environment
 
 An [OpenEnv](https://openenv.dev)-compliant reinforcement learning environment where an AI agent learns to analyze legal contracts — identifying risky clauses, flagging issues, and assessing risk — simulating the work of a junior legal associate.
@@ -208,29 +218,13 @@ Dockerfile
 ## HF Space Deployment
 
 ```bash
-# Create Space
-huggingface-cli repo create lexenv --type space --sdk docker
-
 # Add secrets in Space Settings:
 #   OPENAI_API_KEY = gsk_...  (Groq key)
 #   API_BASE_URL   = https://api.groq.com/openai/v1
 #   MODEL_NAME     = llama3-8b-8192
 
-# Push
 git remote add space https://huggingface.co/spaces/<your-username>/lexenv
 git push space main
 ```
 
 The Space is tagged `openenv` for discoverability.
-=======
----
-title: Lexenv
-emoji: 🌖
-colorFrom: purple
-colorTo: gray
-sdk: docker
-pinned: false
----
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
->>>>>>> 32a30d5df7fd7d00dae5fb608258e8edec60a4b3
