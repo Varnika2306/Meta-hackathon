@@ -1,3 +1,12 @@
+---
+title: LexEnv
+emoji: ⚖️
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 # LexEnv — AI Legal Document Analysis Environment
 
 An [OpenEnv](https://github.com/meta-pytorch/OpenEnv) reinforcement learning environment where an AI agent learns to analyze legal documents — identifying risky clauses, flagging issues, and assessing risk — simulating the work of a junior legal associate.
