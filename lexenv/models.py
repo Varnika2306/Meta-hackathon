@@ -1,9 +1,4 @@
-"""
-LexEnv Pydantic Models
-Inherits from openenv-core base classes for full spec compliance.
-"""
-
-from pydantic import Field, ConfigDict
+from pydantic import Field, ConfigDict, field_validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
@@ -32,6 +27,18 @@ class LexAction(Action):
     analysis: str = Field(..., description="Detailed analysis text")
     flags: List[Dict[str, Any]] = Field(default_factory=list, description="Issues flagged")
     risk_assessment: RiskLevel = Field(default=RiskLevel.MEDIUM, description="Overall risk level")
+
+    @field_validator("risk_assessment", mode="before")
+    @classmethod
+    def normalize_risk_level(cls, v: Any) -> str:
+        if isinstance(v, str):
+            v_lower = v.lower().strip()
+            # Handle common variations
+            if "critical" in v_lower: return "critical"
+            if "high" in v_lower: return "high"
+            if "medium" in v_lower: return "medium"
+            if "low" in v_lower: return "low"
+        return v
 
 
 class LexObservation(Observation):
