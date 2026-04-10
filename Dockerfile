@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY lexenv/ ./lexenv/
 COPY server/ ./server/
+COPY frontend/ ./frontend/
 COPY inference.py .
 COPY pyproject.toml .
 COPY openenv.yaml .
