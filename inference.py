@@ -23,7 +23,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 # Fallback Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("HF_TOKEN")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 # Accept OPENAI_API_KEY (spec requirement)
 API_KEY = os.getenv("OPENAI_API_KEY")
