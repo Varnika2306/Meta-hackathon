@@ -102,7 +102,10 @@ class LexGrader:
                 # Add weighted score for this issue
                 step_score += issue.get("weight", 1.0/len(self.ground_truth)) * confidence
         
-        return min(1.0, step_score), matched_issue_ids, match_confidences
+        # Base score should be at least slightly positive even if nothing found
+        # and capped below 1.0
+        final_step_score = max(0.01, min(0.99, step_score))
+        return final_step_score, matched_issue_ids, match_confidences
     
     def grade_episode(
         self,
@@ -147,14 +150,13 @@ class LexGrader:
         expected_steps = max(2, len(self.ground_truth) / 3)  # ~3 issues per step
         efficiency = min(1.0, max(0.5, expected_steps / steps_taken))
         
-        # Final weighted score
+        # Final weighted score strictly within (0, 1)
         final_score = (0.60 * completeness) + (0.25 * accuracy) + (0.15 * efficiency)
-        
         return {
             "completeness": completeness,
             "accuracy": accuracy,
             "efficiency": efficiency,
-            "final_score": min(1.0, max(0.0, final_score))
+            "final_score": min(0.99, max(0.01, final_score))
         }
     
     def calculate_step_reward(
@@ -194,7 +196,7 @@ class LexGrader:
             elif agent_risk_level.lower() == "high" and num_issues >= 1:
                 risk_match = 0.05
         
-        total_reward = max(0.0, min(1.0, step_score + early_bonus + quality_bonus + risk_match))
+        total_reward = max(0.01, min(0.99, step_score + early_bonus + quality_bonus + risk_match))
         
         return {
             "per_step_score": step_score,

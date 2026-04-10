@@ -105,7 +105,11 @@ class EnvClient:
         """Submit action and get result"""
         url = f"{self.base_url}/step"
         response = await self.client.post(url, json=action)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            print(f"[DEBUG] 422 Validation Error Response: {e.response.text}", flush=True)
+            raise e
         return response.json()
     
     async def get_state(self) -> Dict[str, Any]:
