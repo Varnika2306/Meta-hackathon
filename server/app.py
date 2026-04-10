@@ -7,6 +7,7 @@ Provides /health, /metadata, /schema, /mcp, /reset, /step, /state automatically.
 import os
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from openenv.core import create_fastapi_app
 
@@ -19,6 +20,9 @@ from lexenv.data.contracts import list_tasks
 # ============================================================================
 
 app: FastAPI = create_fastapi_app(make_env, LexAction, LexObservation)
+
+# Mount the frontend UI
+app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")
 
 # Override the auto-generated title/version with our project info
 app.title = "LexEnv — Legal Document Analysis Environment"
@@ -41,8 +45,8 @@ async def get_tasks():
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Redirect root to API documentation."""
-    return RedirectResponse(url="/docs")
+    """Redirect root to /ui/."""
+    return RedirectResponse(url="/ui/")
 
 
 # ============================================================================

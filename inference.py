@@ -1,6 +1,6 @@
 """
 LexEnv Inference Script
-- Uses Groq API (OpenAI-compatible) to analyze contracts
+- Uses OpenAI API to analyze contracts
 - Exact [START]/[STEP]/[END] logging format for evaluation
 - Async HTTP calls to environment
 """
@@ -18,10 +18,10 @@ import httpx
 # CONFIGURATION
 # ============================================================================
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama3-8b-8192")
-# Accept OPENAI_API_KEY (spec requirement) or HF_TOKEN (Groq/HF Space convention)
-API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+# Accept OPENAI_API_KEY (spec requirement)
+API_KEY = os.getenv("OPENAI_API_KEY")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
 
@@ -163,7 +163,7 @@ async def get_model_response(
     observation: Dict[str, Any],
     history: List[str]
 ) -> Optional[Dict[str, Any]]:
-    """Get response from Groq model"""
+    """Get response from OpenAI model"""
     try:
         user_prompt = build_user_prompt(
             step=step,
@@ -205,7 +205,7 @@ async def get_model_response(
         }
         
     except APIError as e:
-        print(f"[DEBUG] Groq API error: {e}", flush=True)
+        print(f"[DEBUG] OpenAI API error: {e}", flush=True)
         return None
     except Exception as e:
         print(f"[DEBUG] Error getting model response: {e}", flush=True)

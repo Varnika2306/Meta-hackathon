@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LexEnv Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="top-nav">
+        <div class="nav-brand">
+            <span class="logo">LexEnv</span>
+            <span class="subtitle">AI Legal Analysis Environment</span>
+        </div>
+        <div class="nav-controls">
+            <select id="task-select">
+                <option value="" disabled selected>Loading tasks...</option>
+            </select>
+            <button id="btn-reset" class="btn btn-secondary">RESET</button>
+            <button id="btn-run" class="btn btn-primary" disabled>SUBMIT ACTION</button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <!-- Left Panel: Context & Instructions -->
+        <div class="panel panel-left">
+            <div class="panel-header">
+                <h3>ENVIRONMENT CONTEXT</h3>
+            </div>
+            <div class="panel-content">
+                <div id="logs-container">
+                    <p class="sys-msg fade-in">> [SYSTEM] LexEnv core standing by.</p>
+                    <p class="sys-msg">> Please select a task and press RESET to begin.</p>
+                </div>
+                
+                <div id="context-wrapper" class="hidden">
+                    <div class="info-block">
+                        <span class="label">INSTRUCTION</span>
+                        <div id="instruction-text" class="content-text"></div>
+                    </div>
+                    
+                    <div class="info-block">
+                        <span class="label">CONTRACT EXCERPT</span>
+                        <div id="excerpt-text" class="content-text code-block"></div>
+                    </div>
+
+                    <div class="info-block hidden" id="feedback-block">
+                        <span class="label">PREVIOUS FEEDBACK</span>
+                        <div id="feedback-text" class="content-text feedback-highlight"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Status & Interaction -->
+        <div class="panel panel-right">
+            <div class="panel-header">
+                <h3>ENGINE STATUS</h3>
+            </div>
+            
+            <div class="stats-row">
+                <div class="stat-card">
+                    <span class="stat-label">SCORE</span>
+                    <span class="stat-value" id="stat-score">0.00</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">REWARD (Δ)</span>
+                    <span class="stat-value" id="stat-delta">+0.00</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">STEP</span>
+                    <span class="stat-value" id="stat-step">0/0</span>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <span class="section-title">ISSUES IDENTIFIED</span>
+                <div id="flags-container" class="flags-list">
+                    <p class="placeholder-text">No issues flagged yet.</p>
+                </div>
+            </div>
+
+            <div class="panel-section flex-grow">
+                <span class="section-title">ACTION SUBMISSION (JSON)</span>
+                <textarea id="action-input" class="code-input" spellcheck="false" placeholder="Awaiting environment state..." disabled></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
