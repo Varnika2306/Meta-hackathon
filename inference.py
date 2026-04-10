@@ -25,8 +25,8 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("HF_TOKEN")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-# Accept OPENAI_API_KEY (spec requirement)
-API_KEY = os.getenv("OPENAI_API_KEY")
+# Accept custom API_KEY (platform standard) or OPENAI_API_KEY
+API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
 
@@ -216,8 +216,13 @@ async def get_model_response(
             )
             text = (response.choices[0].message.content or "").strip()
         except APIError as e:
-            print(f"[DEBUG] OpenAI API error: {e}", flush=True)
-            if fallback_client:
+            print(f"[DEBUG] Primary API error: {e}", flush=True)
+            
+            # Use Groq fallback ONLY if we are using the default OpenAI URL.
+            # If the platform provides a custom API_BASE_URL, we MUST use it.
+            is_default_api = "openai.com" in API_BASE_URL
+            
+            if fallback_client and is_default_api:
                 print(f"[DEBUG] Falling back to Groq ({GROQ_MODEL})...", flush=True)
                 response = await fallback_client.chat.completions.create(
                     model=GROQ_MODEL,
@@ -227,7 +232,9 @@ async def get_model_response(
                 )
                 text = (response.choices[0].message.content or "").strip()
             else:
-                print("[DEBUG] No fallback configured, failing...", flush=True)
+                if not is_default_api:
+                    print(f"[DEBUG] Custom API_BASE_URL detected. Bypassing fallback to stay within proxy.", flush=True)
+                print("[DEBUG] No fallback available, failing...", flush=True)
                 return None
         
         # Try to parse JSON response
