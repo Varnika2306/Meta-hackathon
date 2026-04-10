@@ -20,6 +20,11 @@ import httpx
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+
+# Fallback Configuration
+GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("HF_TOKEN")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+
 # Accept OPENAI_API_KEY (spec requirement)
 API_KEY = os.getenv("OPENAI_API_KEY")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
@@ -158,12 +163,13 @@ def build_user_prompt(
 
 
 async def get_model_response(
-    client: AsyncOpenAI,
+    primary_client: AsyncOpenAI,
+    fallback_client: Optional[AsyncOpenAI],
     step: int,
     observation: Dict[str, Any],
     history: List[str]
 ) -> Optional[Dict[str, Any]]:
-    """Get response from OpenAI model"""
+    """Get response from OpenAI model, fallback to Groq"""
     try:
         user_prompt = build_user_prompt(
             step=step,
@@ -173,17 +179,33 @@ async def get_model_response(
             history=history
         )
         
-        response = await client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS
-        )
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
+        ]
         
-        text = (response.choices[0].message.content or "").strip()
+        try:
+            response = await primary_client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS
+            )
+            text = (response.choices[0].message.content or "").strip()
+        except APIError as e:
+            print(f"[DEBUG] OpenAI API error: {e}", flush=True)
+            if fallback_client:
+                print(f"[DEBUG] Falling back to Groq ({GROQ_MODEL})...", flush=True)
+                response = await fallback_client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    messages=messages,
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_TOKENS
+                )
+                text = (response.choices[0].message.content or "").strip()
+            else:
+                print("[DEBUG] No fallback configured, failing...", flush=True)
+                return None
         
         # Try to parse JSON response
         try:
@@ -205,7 +227,7 @@ async def get_model_response(
         }
         
     except APIError as e:
-        print(f"[DEBUG] OpenAI API error: {e}", flush=True)
+        print(f"[DEBUG] Groq Fallback API error: {e}", flush=True)
         return None
     except Exception as e:
         print(f"[DEBUG] Error getting model response: {e}", flush=True)
@@ -225,6 +247,7 @@ async def main() -> None:
     
     # Initialize clients
     openai_client = AsyncOpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    groq_client = AsyncOpenAI(base_url="https://api.groq.com/openai/v1", api_key=GROQ_API_KEY) if GROQ_API_KEY else None
     env_client = EnvClient(ENV_URL)
     
     history: List[str] = []
@@ -251,7 +274,8 @@ async def main() -> None:
             
             # Get model response
             action_dict = await get_model_response(
-                openai_client,
+                primary_client=openai_client,
+                fallback_client=groq_client,
                 step=step,
                 observation=observation,
                 history=history
