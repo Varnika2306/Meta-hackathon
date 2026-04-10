@@ -456,14 +456,15 @@ def get_task_data(task_id: str) -> Dict[str, Any]:
     return TASK_DATA.get(task_id)
 
 
-def list_tasks() -> Dict[str, Dict[str, Any]]:
+def list_tasks() -> List[Dict[str, Any]]:
     """List all available tasks"""
-    return {
-        task_id: {
+    return [
+        {
+            "id": task_id,
             "name": data["name"],
             "difficulty": data["difficulty"],
             "expected_issues": data["expected_issues"],
             "max_steps": data["max_steps"]
         }
         for task_id, data in TASK_DATA.items()
-    }
+    ]
