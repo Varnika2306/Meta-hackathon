@@ -5,7 +5,7 @@ description: >
   documents — identifying risky clauses, flagging issues, and assessing risk —
   simulating the work of a junior legal associate.
 app: server.app:app
-port: 8000
+port: 7860
 tags:
   - openenv
   - legal

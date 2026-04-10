@@ -22,7 +22,7 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3-8b-8192")
 # Accept OPENAI_API_KEY (spec requirement) or HF_TOKEN (Groq/HF Space convention)
 API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
+ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
 
 MAX_STEPS = 5
