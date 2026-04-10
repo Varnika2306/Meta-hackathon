@@ -6,6 +6,7 @@ Provides /health, /metadata, /schema, /mcp, /reset, /step, /state automatically.
 
 import os
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from openenv.core import create_fastapi_app
 
@@ -36,6 +37,12 @@ app.description = (
 async def get_tasks():
     """List all available tasks with metadata."""
     return {"tasks": list_tasks()}
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect root to API documentation."""
+    return RedirectResponse(url="/docs")
 
 
 # ============================================================================
