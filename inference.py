@@ -1,6 +1,6 @@
 """
 LexEnv Inference Script
-- Uses OpenAI API to analyze contracts
+- Uses OpenAI-compatible client to analyze contracts
 - Exact [START]/[STEP]/[END] logging format for evaluation
 - Async HTTP calls to environment
 """
@@ -18,20 +18,16 @@ import httpx
 # CONFIGURATION
 # ============================================================================
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+# REQUIRED: Use validator-provided credentials (no fallback defaults!)
+API_BASE_URL = os.getenv("API_BASE_URL")
+API_KEY = os.getenv("API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama3-8b-8192")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Fallback Configuration
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("HF_TOKEN")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-
-# Accept custom API_KEY (platform standard) or OPENAI_API_KEY
-API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
-ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
+ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
 
 MAX_STEPS = 5
-MAX_TOTAL_REWARD = 5.0  # Max possible cumulative reward
 SUCCESS_SCORE_THRESHOLD = 0.5
 
 TEMPERATURE = 0.2
@@ -54,7 +50,7 @@ SYSTEM_PROMPT = textwrap.dedent("""
 
 
 # ============================================================================
-# LOGGING (Exact format for evaluation)
+# LOGGING (Exact format for evaluation) — SCORES MUST BE STRICTLY IN (0, 1)
 # ============================================================================
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -74,7 +70,14 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    """Log episode end with exact [END] format"""
+    """
+    Log episode end with exact [END] format.
+    CRITICAL: Score must be strictly in (0, 1), NOT [0, 1]
+    """
+    # ENFORCE: 0 < score < 1 (exclusive bounds)
+    if score <= 0.0 or score >= 1.0:
+        score = max(0.01, min(0.99, score))
+    
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
         f"[END] success={str(success).lower()} steps={steps} score={score:.3f} "
@@ -105,11 +108,7 @@ class EnvClient:
         """Submit action and get result"""
         url = f"{self.base_url}/step"
         response = await self.client.post(url, json=action)
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            print(f"[DEBUG] 422 Validation Error Response: {e.response.text}", flush=True)
-            raise e
+        response.raise_for_status()
         return response.json()
     
     async def get_state(self) -> Dict[str, Any]:
@@ -167,75 +166,32 @@ def build_user_prompt(
 
 
 async def get_model_response(
-    primary_client: AsyncOpenAI,
-    fallback_client: Optional[AsyncOpenAI],
+    client: AsyncOpenAI,
     step: int,
     observation: Dict[str, Any],
     history: List[str]
 ) -> Optional[Dict[str, Any]]:
-    """Get response from OpenAI model, fallback to Groq"""
-    def clean_action(raw: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure the action dictionary strictly follows LexAction schema"""
-        cleaned = {
-            "analysis": str(raw.get("analysis", "Unable to generate analysis")),
-            "flags": raw.get("flags", []),
-            "risk_assessment": str(raw.get("risk_assessment", "medium")).lower().strip()
-        }
-        # Normalize risk level
-        if "critical" in cleaned["risk_assessment"]: cleaned["risk_assessment"] = "critical"
-        elif "high" in cleaned["risk_assessment"]: cleaned["risk_assessment"] = "high"
-        elif "low" in cleaned["risk_assessment"]: cleaned["risk_assessment"] = "low"
-        else: cleaned["risk_assessment"] = "medium"
-        
-        # Ensure analysis is not too short for the grader
-        if len(cleaned["analysis"]) < 50:
-            cleaned["analysis"] = cleaned["analysis"].ljust(50, ".")
-            
-        return cleaned
-
+    """Get response from LLM (OpenAI-compatible API)"""
     try:
         user_prompt = build_user_prompt(
             step=step,
-            contract_excerpt=observation["observation"]["contract_excerpt"],
-            instruction=observation["observation"]["instruction"],
-            previous_analysis=observation["observation"]["previous_analysis"],
+            contract_excerpt=observation.get("contract_excerpt", ""),
+            instruction=observation.get("instruction", ""),
+            previous_analysis=observation.get("previous_analysis"),
             history=history
         )
         
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt}
-        ]
+        response = await client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=TEMPERATURE,
+            max_tokens=MAX_TOKENS
+        )
         
-        try:
-            response = await primary_client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                temperature=TEMPERATURE,
-                max_tokens=MAX_TOKENS
-            )
-            text = (response.choices[0].message.content or "").strip()
-        except APIError as e:
-            print(f"[DEBUG] Primary API error: {e}", flush=True)
-            
-            # Use Groq fallback ONLY if we are using the default OpenAI URL.
-            # If the platform provides a custom API_BASE_URL, we MUST use it.
-            is_default_api = "openai.com" in API_BASE_URL
-            
-            if fallback_client and is_default_api:
-                print(f"[DEBUG] Falling back to Groq ({GROQ_MODEL})...", flush=True)
-                response = await fallback_client.chat.completions.create(
-                    model=GROQ_MODEL,
-                    messages=messages,
-                    temperature=TEMPERATURE,
-                    max_tokens=MAX_TOKENS
-                )
-                text = (response.choices[0].message.content or "").strip()
-            else:
-                if not is_default_api:
-                    print(f"[DEBUG] Custom API_BASE_URL detected. Bypassing fallback to stay within proxy.", flush=True)
-                print("[DEBUG] No fallback available, failing...", flush=True)
-                return None
+        text = (response.choices[0].message.content or "").strip()
         
         # Try to parse JSON response
         try:
@@ -245,19 +201,19 @@ async def get_model_response(
             if start >= 0 and end > start:
                 json_str = text[start:end]
                 action = json.loads(json_str)
-                return clean_action(action)
+                return action
         except json.JSONDecodeError:
             pass
         
         # Fallback: construct minimal action
-        return clean_action({
-            "analysis": text[:1000] if text else "Unable to analyze",
+        return {
+            "analysis": text[:500] if text else "Unable to analyze",
             "flags": [],
             "risk_assessment": "medium"
-        })
+        }
         
     except APIError as e:
-        print(f"[DEBUG] Groq Fallback API error: {e}", flush=True)
+        print(f"[DEBUG] LLM API error: {e}", flush=True)
         return None
     except Exception as e:
         print(f"[DEBUG] Error getting model response: {e}", flush=True)
@@ -271,11 +227,18 @@ async def get_model_response(
 async def main() -> None:
     """Run agent against environment"""
     
-    if not API_KEY:
-        print("[ERROR] API key not set. Skipping run.", flush=True)
-        # log_start/end so platform sees valid markers
+    # Validate required credentials
+    if not API_KEY or not API_BASE_URL:
+        print(
+            f"[ERROR] Missing required environment variables:\n"
+            f"  API_KEY={bool(API_KEY)}\n"
+            f"  API_BASE_URL={bool(API_BASE_URL)}\n"
+            f"These must be provided by the OpenEnv validator.",
+            flush=True
+        )
+        # Still log start/end for validator to parse
         log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
-        log_end(success=False, steps=0, score=0.0, rewards=[])
+        log_end(success=False, steps=0, score=0.01, rewards=[])  # ✅ Use 0.01, not 0.0
         return
     
     # Initialize clients
@@ -286,7 +249,7 @@ async def main() -> None:
     history: List[str] = []
     rewards: List[float] = []
     steps_taken = 0
-    score = 0.0
+    score = 0.01  # ✅ Initialize to 0.01, not 0.0
     success = False
     error_msg: Optional[str] = None
     
@@ -307,10 +270,9 @@ async def main() -> None:
             
             # Get model response
             action_dict = await get_model_response(
-                primary_client=openai_client,
-                fallback_client=groq_client,
+                openai_client,
                 step=step,
-                observation=observation,
+                observation=obs_data,
                 history=history
             )
             
@@ -325,7 +287,7 @@ async def main() -> None:
             step_result = await env_client.step(action_dict)
             
             # Extract results
-            reward = step_result.get("reward", 0.0) or 0.0
+            reward = step_result.get("reward", 0.01) or 0.01  # ✅ Default to 0.01
             done = step_result.get("done", False)
             
             rewards.append(reward)
@@ -349,17 +311,20 @@ async def main() -> None:
             
             observation = step_result
         
-        # Calculate final score
+        # Calculate final score — MUST CLAMP TO (0.01, 0.99), NOT [0, 1]
         if rewards:
             score = sum(rewards) / len(rewards)
         
-        score = min(max(score, 0.0), 1.0)  # Clamp to [0, 1]
+        # ✅ CRITICAL FIX: Clamp to exclusive bounds (0, 1), enforced as [0.01, 0.99]
+        score = max(0.01, min(0.99, score))
         success = score >= SUCCESS_SCORE_THRESHOLD
         
     except Exception as e:
         print(f"[DEBUG] Episode error: {e}", flush=True)
         error_msg = str(e)
         success = False
+        # ✅ Initialize score to 0.01 if error occurs
+        score = max(0.01, min(0.99, score))
     
     finally:
         try:
@@ -367,6 +332,7 @@ async def main() -> None:
         except:
             pass
         
+        # ✅ Final protection: ensure score is in (0, 1)
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
