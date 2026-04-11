@@ -49,7 +49,6 @@ function logMsg(msg, type = 'sys') {
     elements.logsContainer.appendChild(entry);
     elements.logsContainer.scrollTop = elements.logsContainer.scrollHeight;
     
-    // Prune logs if too many
     if (elements.logsContainer.childElementCount > 20) {
         elements.logsContainer.removeChild(elements.logsContainer.firstChild);
     }
@@ -108,21 +107,38 @@ function updateStateUI(state) {
     const prog = obs.progress || {};
     elements.statStep.textContent = `${prog.step || 0} / ${prog.max_steps || 0}`;
 
-    // Update reward displays if available
-    const reward = state.reward || 0;
+    // Update reward displays correctly (fallback to observation.reward if top-level missing)
+    const reward = state.reward !== undefined ? state.reward : (obs.reward || 0);
     const currentScore = parseFloat(elements.statScore.textContent);
-    elements.statScore.textContent = (currentScore + reward).toFixed(2);
+    
+    // Only update total score during steps, not reset
+    if (prog.step > 0) {
+        elements.statScore.textContent = (currentScore + reward).toFixed(2);
+    } else if (prog.step === 0 && !elements.btnRun.disabled) {
+         elements.statScore.textContent = '0.00';
+    }
+    
     elements.statDelta.textContent = (reward >= 0 ? '+' : '') + reward.toFixed(2);
     elements.statDelta.style.color = reward >= 0 ? 'var(--pos-green)' : 'var(--neg-red)';
     
     // Action Controls
-    elements.btnRun.disabled = state.done;
+    const isDone = state.done || obs.done;
+    elements.btnRun.disabled = isDone;
     
-    if (state.done) {
+    if (isDone) {
         elements.actionInput.disabled = true;
+        elements.actionInput.placeholder = "Session complete.";
         logMsg(`Episode Terminated. Final Score: ${elements.statScore.textContent}`, 'sys');
     } else {
         elements.actionInput.disabled = false;
+        elements.actionInput.placeholder = "Enter your legal analysis here...";
+        
+        // Smart Template Pre-fill based on task
+        const actionVal = elements.actionInput.value;
+        if (!actionVal.trim() || actionVal === "Payload awaiting reset...") {
+            const taskName = obs.task_name || "contract";
+            elements.actionInput.value = `Analyzing ${taskName} for risky clauses...\n\nI have identified the following issue in the excerpt:\n- [Clause Reference]: [Description of Risk]`;
+        }
     }
 }
 
@@ -137,9 +153,19 @@ async function actReset() {
     logMsg(`Mounting task environment: ${taskId}`, 'sys');
     
     try {
-        const res = await fetch(`/reset?task_id=${taskId}`, { 
+        // OpenEnv 1.0.0 uses ResetRequest body. task_id can be passed as additionalProperty
+        const payload = {
+            task_id: taskId,
+            seed: Math.floor(Math.random() * 1000)
+        };
+
+        const res = await fetch(`/reset`, { 
             method: 'POST',
-            headers: { 'X-Session-ID': getSessionId() }
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Session-ID': getSessionId() 
+            },
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         
@@ -148,6 +174,7 @@ async function actReset() {
         elements.statDelta.textContent = '0.00';
         elements.statDelta.style.color = 'var(--pos-green)';
         elements.flagsContainer.innerHTML = '<p class="empty-hint">Scanning document...</p>';
+        elements.actionInput.value = ""; // Clear for smart template
         
         updateStateUI(data);
         logMsg('Initialization complete. Agent ready.', 'ready');
@@ -170,7 +197,10 @@ async function actRun() {
     
     try {
         const payload = {
-            action: { "analysis": action, "risk_assessment": "high" }
+            action: { 
+                "analysis": action, 
+                "risk_assessment": action.toLowerCase().includes("risk") ? "high" : "medium" 
+            }
         };
 
         const res = await fetch('/step', {

@@ -51,6 +51,8 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         task_id : "clause_id" | "sla_review" | "ma_assessment"  (default: clause_id)
         seed    : reserved for future stochastic tasks (currently ignored)
         """
+        # Prioritize task_id from kwargs (body-params) over the default argument
+        task_id = kwargs.get("task_id", task_id)
         task_data = get_task_data(task_id)
         if task_data is None:
             raise ValueError(
