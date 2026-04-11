@@ -208,6 +208,27 @@ class LexGrader:
         }
 
 
-def create_grader_for_task(task_id: str, ground_truth: List[Dict[str, Any]]) -> LexGrader:
+def create_grader_for_task(task_id: str, ground_truth: List[Dict[str, Any]] = None) -> LexGrader:
     """Factory function to create grader for specific task"""
-    return LexGrader(ground_truth)
+    if task_id == "clause_id":
+        return ClauseIdGrader()
+    elif task_id == "sla_review":
+        return SLAReviewGrader()
+    elif task_id == "ma_assessment":
+        return MAAssessmentGrader()
+    return LexGrader(ground_truth if ground_truth else [])
+
+# 0-Argument Grader wrappers for OpenEnv validation
+from lexenv.data.contracts import NDA_GROUND_TRUTH, SLA_GROUND_TRUTH, MA_GROUND_TRUTH
+
+class ClauseIdGrader(LexGrader):
+    def __init__(self):
+        super().__init__(NDA_GROUND_TRUTH)
+
+class SLAReviewGrader(LexGrader):
+    def __init__(self):
+        super().__init__(SLA_GROUND_TRUTH)
+
+class MAAssessmentGrader(LexGrader):
+    def __init__(self):
+        super().__init__(MA_GROUND_TRUTH)
