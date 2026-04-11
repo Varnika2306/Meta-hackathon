@@ -44,6 +44,7 @@ class LexAction(Action):
 class LexObservation(Observation):
     """Contract excerpt + context handed to the agent at each step."""
     # Inherited from Observation: done, reward, metadata
+    reward: float = Field(default=0.01)
     task_id: str = Field(..., description="Task identifier")
     task_name: str = Field(..., description="Human-readable task name")
     difficulty: int = Field(..., ge=1, le=3, description="Difficulty level 1-3")
@@ -64,6 +65,6 @@ class LexState(State):
     contract_full_text: str = Field(default="")
     ground_truth_issues: List[Dict[str, Any]] = Field(default_factory=list)
     episode_done: bool = Field(default=False)
-    episode_score: float = Field(default=0.0)
+    episode_score: float = Field(default=0.01)
     step_rewards: List[float] = Field(default_factory=list)
     actions_history: List[Dict[str, Any]] = Field(default_factory=list)

@@ -66,7 +66,7 @@ action_space:
 
 reward:
   type: float
-  range: [0.0, 1.0]
+  range: [0.01, 0.99]
   description: >
     Per-step partial reward proportional to issues identified. Shaped over
     full trajectory with efficiency bonus, risk-match bonus, and quality

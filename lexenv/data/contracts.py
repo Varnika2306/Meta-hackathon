@@ -464,7 +464,8 @@ def list_tasks() -> List[Dict[str, Any]]:
             "name": data["name"],
             "difficulty": data["difficulty"],
             "expected_issues": data["expected_issues"],
-            "max_steps": data["max_steps"]
+            "max_steps": data["max_steps"],
+            "has_grader": True
         }
         for task_id, data in TASK_DATA.items()
     ]
