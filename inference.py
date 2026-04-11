@@ -187,7 +187,14 @@ async def main() -> None:
     # ---- INITIALIZE ----
     try:
         # MUST use validator's credentials
-        openai_client = AsyncOpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+        # FINAL HARDENING: Ensure the base URL ends in /v1. 
+        # Many proxies (like LiteLLM) require this to route correctly.
+        sanitized_base_url = API_BASE_URL.rstrip("/")
+        if not sanitized_base_url.endswith("/v1"):
+            sanitized_base_url += "/v1"
+            print(f"[DEBUG] Sanitized API_BASE_URL: {sanitized_base_url}", flush=True)
+
+        openai_client = AsyncOpenAI(base_url=sanitized_base_url, api_key=API_KEY)
         env_client = EnvClient(ENV_URL)
         
         history: List[str] = []
