@@ -27,6 +27,7 @@ class LexAction(Action):
     analysis: str = Field(..., description="Detailed analysis text")
     flags: List[Dict[str, Any]] = Field(default_factory=list, description="Issues flagged")
     risk_assessment: RiskLevel = Field(default=RiskLevel.MEDIUM, description="Overall risk level")
+    session_id: Optional[str] = Field(None, description="Internal session tracker")
 
     @field_validator("risk_assessment", mode="before")
     @classmethod

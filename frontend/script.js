@@ -26,13 +26,13 @@ const elements = {
 };
 
 /**
- * Session Persistence
+ * Session Persistence - Using LocalStorage for durability
  */
 const getSessionId = () => {
-    let sid = sessionStorage.getItem('lex_session_id');
+    let sid = localStorage.getItem('lex_session_id');
     if (!sid) {
-        sid = 'sess_' + Math.random().toString(36).substring(2, 15);
-        sessionStorage.setItem('lex_session_id', sid);
+        sid = 'sess_' + Math.random().toString(36).substring(2, 10);
+        localStorage.setItem('lex_session_id', sid);
     }
     return sid;
 };
@@ -59,9 +59,8 @@ function logMsg(msg, type = 'sys') {
  */
 async function loadTasks() {
     try {
-        const res = await fetch('/tasks', {
-            headers: { 'X-Session-ID': getSessionId() }
-        });
+        const sid = getSessionId();
+        const res = await fetch(`/tasks?session_id=${sid}`);
         const data = await res.json();
         const tasks = data.tasks || data;
         
@@ -107,15 +106,14 @@ function updateStateUI(state) {
     const prog = obs.progress || {};
     elements.statStep.textContent = `${prog.step || 0} / ${prog.max_steps || 0}`;
 
-    // Update reward displays correctly (fallback to observation.reward if top-level missing)
+    // Update reward displays correctly
     const reward = state.reward !== undefined ? state.reward : (obs.reward || 0);
     const currentScore = parseFloat(elements.statScore.textContent);
     
-    // Only update total score during steps, not reset
     if (prog.step > 0) {
         elements.statScore.textContent = (currentScore + reward).toFixed(2);
-    } else if (prog.step === 0 && !elements.btnRun.disabled) {
-         elements.statScore.textContent = '0.00';
+    } else {
+        elements.statScore.textContent = '0.00';
     }
     
     elements.statDelta.textContent = (reward >= 0 ? '+' : '') + reward.toFixed(2);
@@ -133,11 +131,10 @@ function updateStateUI(state) {
         elements.actionInput.disabled = false;
         elements.actionInput.placeholder = "Enter your legal analysis here...";
         
-        // Smart Template Pre-fill based on task
+        // Smart Template
         const actionVal = elements.actionInput.value;
-        if (!actionVal.trim() || actionVal === "Payload awaiting reset...") {
-            const taskName = obs.task_name || "contract";
-            elements.actionInput.value = `Analyzing ${taskName} for risky clauses...\n\nI have identified the following issue in the excerpt:\n- [Clause Reference]: [Description of Risk]`;
+        if (!actionVal.trim() || actionVal.includes("Analyzing")) {
+            elements.actionInput.value = `Analyzing ${obs.task_name || "contract"}...`;
         }
     }
 }
@@ -153,28 +150,25 @@ async function actReset() {
     logMsg(`Mounting task environment: ${taskId}`, 'sys');
     
     try {
-        // OpenEnv 1.0.0 uses ResetRequest body. task_id can be passed as additionalProperty
+        const sid = getSessionId();
         const payload = {
             task_id: taskId,
-            seed: Math.floor(Math.random() * 1000)
+            session_id: sid
         };
 
-        const res = await fetch(`/reset`, { 
+        const res = await fetch(`/reset?session_id=${sid}`, { 
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-Session-ID': getSessionId() 
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
         
-        // Zero out UI stats
+        // Reset UI stats
         elements.statScore.textContent = '0.00';
         elements.statDelta.textContent = '0.00';
         elements.statDelta.style.color = 'var(--pos-green)';
         elements.flagsContainer.innerHTML = '<p class="empty-hint">Scanning document...</p>';
-        elements.actionInput.value = ""; // Clear for smart template
+        elements.actionInput.value = "";
         
         updateStateUI(data);
         logMsg('Initialization complete. Agent ready.', 'ready');
@@ -189,26 +183,27 @@ async function actReset() {
  * Execute Step/Action
  */
 async function actRun() {
-    const action = elements.actionInput.value;
-    if (!action.trim()) return;
+    const analysis = elements.actionInput.value;
+    if (!analysis.trim()) return;
     
     elements.btnRun.disabled = true;
     logMsg('Processing inference step...', 'sys');
     
     try {
+        const sid = getSessionId();
+        // SLEDGEHAMMER: session_id goes directly into action object
         const payload = {
             action: { 
-                "analysis": action, 
-                "risk_assessment": action.toLowerCase().includes("risk") ? "high" : "medium" 
-            }
+                "analysis": analysis, 
+                "risk_assessment": "high",
+                "session_id": sid 
+            },
+            session_id: sid
         };
 
-        const res = await fetch('/step', {
+        const res = await fetch(`/step?session_id=${sid}`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-Session-ID': getSessionId()
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         
@@ -229,10 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnReset.addEventListener('click', actReset);
     elements.btnRun.addEventListener('click', actRun);
     
-    // Update task and AUTO-RESET on change
     elements.taskSelect.addEventListener('change', () => {
         const selected = elements.taskSelect.options[elements.taskSelect.selectedIndex];
         elements.taskBrief.textContent = selected.dataset.desc;
-        actReset(); // Auto-sync
+        actReset();
     });
 });

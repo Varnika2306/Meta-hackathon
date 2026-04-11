@@ -4,6 +4,7 @@ Inherits from openenv-core Environment base class for full spec compliance.
 """
 
 from typing import Optional, Dict, Any, List
+import threading
 
 from openenv.core import Environment
 from openenv.core.env_server.types import EnvironmentMetadata
@@ -12,25 +13,47 @@ from lexenv.models import LexAction, LexObservation, LexState, RiskLevel
 from lexenv.data.contracts import get_task_data
 from lexenv.graders import create_grader_for_task
 
+# ============================================================================
+# Global Persistence Registry (Handles multi-user session survival)
+# ============================================================================
+_REGISTRY_LOCK = threading.Lock()
+_STATE_REGISTRY: Dict[str, LexState] = {}
+_GRADER_REGISTRY: Dict[str, Any] = {}
 
 class LexEnv(Environment[LexAction, LexObservation, LexState]):
     """
     OpenEnv-compliant Legal Document Analysis Environment.
-
-    Episode flow
-    ─────────────
-    1.  env.reset(task_id=...)  → LexObservation  (step=0)
-    2.  env.step(action)        → LexObservation  (step=1..max_steps, with .done and .reward)
-    3.  env.state               → LexState         (inspect any time)
+    Features state-recovery to survive session-loss in proxy environments.
     """
 
-    SUPPORTS_CONCURRENT_SESSIONS = False
+    SUPPORTS_CONCURRENT_SESSIONS = True
 
     def __init__(self) -> None:
         super().__init__()
         self._state: Optional[LexState] = None
         self._grader = None
         self._episode_history: List[Dict[str, Any]] = []
+
+    def _recover_session(self, session_id: Optional[str]) -> bool:
+        """Attempt to recover state/grader from the global registry."""
+        if not session_id:
+            return False
+        
+        with _REGISTRY_LOCK:
+            if session_id in _STATE_REGISTRY:
+                self._state = _STATE_REGISTRY[session_id]
+                self._grader = _GRADER_REGISTRY.get(session_id)
+                return True
+        return False
+
+    def _persist_session(self, session_id: Optional[str]):
+        """Save current state/grader to the global registry."""
+        if not session_id:
+            return
+            
+        with _REGISTRY_LOCK:
+            _STATE_REGISTRY[session_id] = self._state
+            _GRADER_REGISTRY[session_id] = self._grader
 
     # ------------------------------------------------------------------ #
     # reset (sync — required by Environment ABC)                           #
@@ -43,22 +66,13 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         task_id: str = "clause_id",
         **kwargs: Any,
     ) -> LexObservation:
-        """
-        Reset environment and start a new episode.
-
-        Parameters
-        ----------
-        task_id : "clause_id" | "sla_review" | "ma_assessment"  (default: clause_id)
-        seed    : reserved for future stochastic tasks (currently ignored)
-        """
-        # Prioritize task_id from kwargs (body-params) over the default argument
+        # Check task_id in body
         task_id = kwargs.get("task_id", task_id)
+        session_id = kwargs.get("session_id")
+
         task_data = get_task_data(task_id)
         if task_data is None:
-            raise ValueError(
-                f"Unknown task_id '{task_id}'. "
-                "Available: clause_id, sla_review, ma_assessment"
-            )
+            raise ValueError(f"Unknown task_id '{task_id}'")
 
         self._state = LexState(
             episode_id=episode_id,
@@ -71,17 +85,13 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         self._grader = create_grader_for_task(task_id, task_data["ground_truth"])
         self._episode_history = []
 
-        obs = self._build_observation(task_data, step=0)
-        return obs
+        # Ensure we remember this session globally
+        self._persist_session(session_id)
 
-    async def reset_async(
-        self,
-        seed: Optional[int] = None,
-        episode_id: Optional[str] = None,
-        task_id: str = "clause_id",
-        **kwargs: Any,
-    ) -> LexObservation:
-        return self.reset(seed=seed, episode_id=episode_id, task_id=task_id, **kwargs)
+        return self._build_observation(task_data, step=0)
+
+    async def reset_async(self, **kwargs) -> LexObservation:
+        return self.reset(**kwargs)
 
     # ------------------------------------------------------------------ #
     # step (sync — required by Environment ABC)                            #
@@ -93,21 +103,24 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         timeout_s: Optional[float] = None,
         **kwargs: Any,
     ) -> LexObservation:
-        """Execute one analysis step."""
+        """Execute one analysis step with state-recovery."""
+        
+        # 1. Recovery Attempt (survive instance-loss)
+        session_id = action.session_id or kwargs.get("session_id")
         if self._state is None:
-            raise RuntimeError("Call reset() before step().")
+            if not self._recover_session(session_id):
+                raise RuntimeError("Call reset() before step(). No session found for recovery.")
 
+        # 2. Progress counters
         self._state.step_count += 1
         step_num = self._state.step_count
 
-        # Persist action
+        # 3. Grading logic
         self._state.actions_history.append(action.model_dump())
-
         task_data = get_task_data(self._state.task_id)
         max_steps: int = task_data["max_steps"]
         is_final = step_num >= max_steps
 
-        # Calculate and strictly clamp reward (0.01 to 0.99)
         reward_breakdown = self._grader.calculate_step_reward(
             agent_analysis=action.analysis,
             agent_risk_level=action.risk_assessment.value,
@@ -117,69 +130,41 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         step_reward: float = max(0.01, min(0.99, reward_breakdown["total_step_reward"]))
         self._state.step_rewards.append(step_reward)
 
-        # Episode completion
+        # 4. Episode completion
         done = is_final
         if done:
-            all_analyses = [a.get("analysis", "") for a in self._state.actions_history]
-            all_risks = [a.get("risk_assessment", "medium") for a in self._state.actions_history]
-            episode_grades = self._grader.grade_episode(
-                all_analyses=all_analyses,
-                all_risk_levels=all_risks,
-                steps_taken=step_num,
-            )
-            # Strictly clamp episode final score (0.01 to 0.99)
-            self._state.episode_score = max(0.01, min(0.99, episode_grades["final_score"]))
             self._state.episode_done = True
+            # Keep records in registry for a while (don't delete yet to avoid concurrent errors)
 
         self._episode_history.append({"step": step_num, "reward": step_reward, "done": done})
 
+        # 5. Build transition
         obs = self._build_observation(
             task_data,
             step=step_num,
             previous_feedback=f"Step {step_num} reward: {step_reward:.3f}",
         )
-
-        # Report the partial step reward (strictly clamped 0.01-0.99).
-        # The inference.py script will calculate the final score by averaging these.
         obs.reward = step_reward
         obs.done = done
+
+        # 6. Persistent Update
+        self._persist_session(session_id)
+
         return obs
 
-    async def step_async(
-        self,
-        action: LexAction,
-        timeout_s: Optional[float] = None,
-        **kwargs: Any,
-    ) -> LexObservation:
-        return self.step(action, timeout_s=timeout_s, **kwargs)
-
-    # ------------------------------------------------------------------ #
-    # state property (required by Environment ABC)                         #
-    # ------------------------------------------------------------------ #
+    async def step_async(self, action: LexAction, **kwargs) -> LexObservation:
+        return self.step(action, **kwargs)
 
     @property
     def state(self) -> LexState:
-        if self._state is None:
-            return LexState()
-        return self._state
-
-    # ------------------------------------------------------------------ #
-    # metadata (optional override)                                         #
-    # ------------------------------------------------------------------ #
+        return self._state if self._state else LexState()
 
     def get_metadata(self) -> EnvironmentMetadata:
         return EnvironmentMetadata(
             name="LexEnv",
-            description=(
-                "RL environment for AI legal document analysis. "
-                "Agent identifies risky clauses across NDA, SLA, and M&A contracts."
-            ),
-            version="1.0.0",
+            description="Premium legal analysis environment with state-recovery.",
+            version="1.2.0",
         )
-
-    # ------------------------------------------------------------------ #
-    # internal helpers                                                     #
-    # ------------------------------------------------------------------ #
 
     def _build_observation(
         self,
@@ -195,14 +180,10 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         else:
             quarter = max(200, len(contract) // 4)
             start = quarter * min(step, 3)
-            excerpt = (
-                "[Continuing review — previous feedback received.]\n\n"
-                + contract[start : start + quarter * 2]
-            )
+            excerpt = f"[Continuing review — step {step}]\n\n" + contract[start : start + quarter * 2]
 
         rewards_so_far = sum(self._state.step_rewards) if self._state else 0.0
-        actions_so_far = len(self._state.actions_history) if self._state else 0
-
+        
         return LexObservation(
             task_id=self._state.task_id if self._state else task_data.get("task_id", ""),
             task_name=task_data["name"],
@@ -215,15 +196,11 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             progress={
                 "step": step,
                 "max_steps": max_steps,
-                "issues_found_so_far": actions_so_far,
-                "expected_issues": task_data["expected_issues"],
                 "rewards_so_far": rewards_so_far,
-                "is_gradable": True,
                 "grader": True,
             },
         )
 
-
 def make_env() -> LexEnv:
-    """Factory function required by OpenEnv spec."""
+    """Factory function for OpenEnv."""
     return LexEnv()
