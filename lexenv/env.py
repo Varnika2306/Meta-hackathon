@@ -22,6 +22,7 @@ import shutil
 # ============================================================================
 # Inter-Process Persistence Registry (Handles multi-worker process survival)
 # ============================================================================
+_REGISTRY_LOCK = threading.Lock()
 PERSISTENCE_DIR = "/tmp/lexenv_persistence"
 STATE_FILE = os.path.join(PERSISTENCE_DIR, "states.json")
 

@@ -16,6 +16,7 @@ class ToneGrader:
             or os.getenv("OPENAI_API_KEY") 
             or os.getenv("HF_TOKEN")
             or os.getenv("HF_API_KEY")
+            or os.getenv("GROQ_API_KEY")
         )
         self.base_url = (
             os.getenv("API_BASE_URL")
