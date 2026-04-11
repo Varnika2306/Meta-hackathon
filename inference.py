@@ -29,7 +29,7 @@ MODEL_NAME = os.getenv("MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4
 
 # Environment URL: default to port 7860 (matching our server/Dockerfile)
 ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
-TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
+TASKS_TO_TEST = ["clause_id", "sla_review", "ma_assessment"]
 
 MAX_STEPS = 5
 SUCCESS_SCORE_THRESHOLD = 0.5
@@ -220,14 +220,17 @@ async def main() -> None:
     # ---- VALIDATION ----
     if not API_BASE_URL:
         print(f"[ERROR] No LLM proxy URL found! Checked: API_BASE_URL, OPENAI_API_BASE, OPENAI_BASE_URL", flush=True)
-        log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
-        log_end(success=False, steps=0, score=0.01, rewards=[])
+        # Fail gracefully for all tasks if no URL
+        for t in TASKS_TO_TEST:
+            log_start(task=t, env="lexenv", model=MODEL_NAME)
+            log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
     
     if not API_KEY:
         print(f"[ERROR] No API key found! Checked: API_KEY, OPENAI_API_KEY, HF_TOKEN", flush=True)
-        log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
-        log_end(success=False, steps=0, score=0.01, rewards=[])
+        for t in TASKS_TO_TEST:
+            log_start(task=t, env="lexenv", model=MODEL_NAME)
+            log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
     
     print(f"[DEBUG] Using LLM proxy: {API_BASE_URL}", flush=True)
@@ -252,102 +255,103 @@ async def main() -> None:
     
     env_client = EnvClient(ENV_URL)
     
-    history: List[str] = []
-    rewards: List[float] = []
-    steps_taken = 0
-    score = 0.01
-    success = False
-    
-    log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
-    
-    try:
-        # ---- RESET ENVIRONMENT ----
-        print(f"[DEBUG] Resetting environment with task={TASK_NAME}", flush=True)
-        reset_result = await env_client.reset(TASK_NAME)
-        observation = reset_result.get("observation", reset_result)
-        print(f"[DEBUG] Reset successful, got observation keys: {list(observation.keys()) if isinstance(observation, dict) else 'not-dict'}", flush=True)
-        
-        # ---- MAIN LOOP: LLM call → env step ----
-        for step in range(1, MAX_STEPS + 1):
-            print(f"[DEBUG] ===== STEP {step} =====", flush=True)
-            
-            max_steps_from_obs = observation.get("max_steps", MAX_STEPS) if isinstance(observation, dict) else MAX_STEPS
-            if max_steps_from_obs > 0 and step > max_steps_from_obs:
-                print(f"[DEBUG] Reached max_steps={max_steps_from_obs}, ending", flush=True)
-                break
-            
-            # ---- CALL LLM (VALIDATOR MONITORS THIS) ----
-            contract_text = observation.get("contract_excerpt", "") if isinstance(observation, dict) else ""
-            instr_text = observation.get("instruction", "") if isinstance(observation, dict) else ""
-            
-            action_dict = await call_llm_model(
-                clients=openai_clients,
-                step=step,
-                contract_excerpt=contract_text,
-                instruction=instr_text,
-            )
-            print(f"[DEBUG] Step {step}: Got action response", flush=True)
-            
-            # ---- SUBMIT TO ENVIRONMENT ----
-            try:
-                step_result = await env_client.step(action_dict)
-            except Exception as e:
-                print(f"[ERROR] Env step failed: {type(e).__name__}: {e}", flush=True)
-                # Try without wrapping as fallback
-                try:
-                    url = f"{env_client.base_url}/step"
-                    response = await env_client.client.post(url, json=action_dict)
-                    response.raise_for_status()
-                    step_result = response.json()
-                except Exception as e2:
-                    print(f"[ERROR] Env step fallback also failed: {e2}", flush=True)
-                    step_result = {"reward": 0.01, "done": step >= max_steps_from_obs}
-            
-            # ---- PROCESS RESULT ----
-            reward = step_result.get("reward", 0.01) or 0.01
-            done = step_result.get("done", False)
-            
-            rewards.append(reward)
-            steps_taken = step
-            
-            # Log step
-            action_str = action_dict.get("analysis", "")[:80]
-            log_step(step=step, action=action_str, reward=reward, done=done, error=None)
-            
-            history.append(f"Step {step}: {action_str}")
-            
-            print(f"[DEBUG] Step {step} complete: reward={reward:.3f}, done={done}", flush=True)
-            
-            if done:
-                print(f"[DEBUG] Episode ended (done=True)", flush=True)
-                break
-            
-            # Update observation for next step
-            observation = step_result.get("observation", step_result)
-        
-        # ---- CALCULATE FINAL SCORE ----
-        if rewards:
-            score = sum(rewards) / len(rewards)
-        
-        score = max(0.01, min(0.99, score))
-        success = score >= SUCCESS_SCORE_THRESHOLD
-        
-        print(f"[DEBUG] Final score: {score:.3f}, success={success}", flush=True)
-        
-    except Exception as e:
-        print(f"[ERROR] Episode failed: {type(e).__name__}: {str(e)}", flush=True)
-        import traceback
-        traceback.print_exc()
-        score = max(0.01, min(0.99, score))
+    for task_name in TASKS_TO_TEST:
+        history: List[str] = []
+        rewards: List[float] = []
+        steps_taken = 0
+        score = 0.01
         success = False
-    
-    finally:
-        try:
-            await env_client.close()
-        except Exception:
-            pass
         
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+        log_start(task=task_name, env="lexenv", model=MODEL_NAME)
+        
+        try:
+            # ---- RESET ENVIRONMENT ----
+            print(f"[DEBUG] Resetting environment with task={task_name}", flush=True)
+            reset_result = await env_client.reset(task_name)
+            observation = reset_result.get("observation", reset_result)
+            print(f"[DEBUG] Reset successful", flush=True)
+            
+            # ---- MAIN LOOP: LLM call → env step ----
+            for step in range(1, MAX_STEPS + 1):
+                print(f"[DEBUG] ===== STEP {step} =====", flush=True)
+                
+                max_steps_from_obs = observation.get("max_steps", MAX_STEPS) if isinstance(observation, dict) else MAX_STEPS
+                if max_steps_from_obs > 0 and step > max_steps_from_obs:
+                    print(f"[DEBUG] Reached max_steps={max_steps_from_obs}, ending", flush=True)
+                    break
+                
+                # ---- CALL LLM (VALIDATOR MONITORS THIS) ----
+                contract_text = observation.get("contract_excerpt", "") if isinstance(observation, dict) else ""
+                instr_text = observation.get("instruction", "") if isinstance(observation, dict) else ""
+                
+                action_dict = await call_llm_model(
+                    clients=openai_clients,
+                    step=step,
+                    contract_excerpt=contract_text,
+                    instruction=instr_text,
+                )
+                print(f"[DEBUG] Step {step}: Got action response", flush=True)
+                
+                # ---- SUBMIT TO ENVIRONMENT ----
+                try:
+                    step_result = await env_client.step(action_dict)
+                except Exception as e:
+                    print(f"[ERROR] Env step failed: {type(e).__name__}: {e}", flush=True)
+                    # Try without wrapping as fallback
+                    try:
+                        url = f"{env_client.base_url}/step"
+                        response = await env_client.client.post(url, json=action_dict)
+                        response.raise_for_status()
+                        step_result = response.json()
+                    except Exception as e2:
+                        print(f"[ERROR] Env step fallback also failed: {e2}", flush=True)
+                        step_result = {"reward": 0.01, "done": step >= max_steps_from_obs}
+                
+                # ---- PROCESS RESULT ----
+                reward = step_result.get("reward", 0.01) or 0.01
+                done = step_result.get("done", False)
+                
+                rewards.append(reward)
+                steps_taken = step
+                
+                # Log step
+                action_str = action_dict.get("analysis", "")[:80]
+                log_step(step=step, action=action_str, reward=reward, done=done, error=None)
+                
+                history.append(f"Step {step}: {action_str}")
+                
+                print(f"[DEBUG] Step {step} complete: reward={reward:.3f}, done={done}", flush=True)
+                
+                if done:
+                    print(f"[DEBUG] Episode ended (done=True)", flush=True)
+                    break
+                
+                # Update observation for next step
+                observation = step_result.get("observation", step_result)
+            
+            # ---- CALCULATE FINAL SCORE ----
+            if rewards:
+                score = sum(rewards) / len(rewards)
+            
+            score = max(0.01, min(0.99, score))
+            success = score >= SUCCESS_SCORE_THRESHOLD
+            
+            print(f"[DEBUG] Final score: {score:.3f}, success={success}", flush=True)
+            
+        except Exception as e:
+            print(f"[ERROR] Episode failed: {type(e).__name__}: {str(e)}", flush=True)
+            import traceback
+            traceback.print_exc()
+            score = max(0.01, min(0.99, score))
+            success = False
+            
+        finally:
+            log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+            
+    try:
+        await env_client.close()
+    except Exception:
+        pass
 
 
 # ============================================================================
