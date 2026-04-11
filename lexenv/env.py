@@ -222,6 +222,11 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         )
 
 
+_GLOBAL_ENV = None
+
 def make_env() -> LexEnv:
     """Factory function required by OpenEnv spec."""
-    return LexEnv()
+    global _GLOBAL_ENV
+    if _GLOBAL_ENV is None:
+        _GLOBAL_ENV = LexEnv()
+    return _GLOBAL_ENV
