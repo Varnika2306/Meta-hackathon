@@ -46,10 +46,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/scalar-institute/lexenv"
-Documentation = "https://github.com/scalar-institute/lexenv/blob/main/README.md"
-Repository = "https://github.com/scalar-institute/lexenv.git"
-Issues = "https://github.com/scalar-institute/lexenv/issues"
+Homepage = "https://github.com/Varnika2306/Meta-hackathon"
+Documentation = "https://github.com/Varnika2306/Meta-hackathon/blob/main/README.md"
+Repository = "https://github.com/Varnika2306/Meta-hackathon.git"
+Issues = "https://github.com/Varnika2306/Meta-hackathon/issues"
 
 [tool.setuptools]
 packages = ["lexenv", "server"]

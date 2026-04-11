@@ -9,3 +9,5 @@ venv/
 dist/
 build/
 .pytest_cache/
+uv.lock
+validate*.sh
