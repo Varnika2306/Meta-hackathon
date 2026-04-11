@@ -210,19 +210,8 @@ async def call_llm_model(
 async def main() -> None:
     """Run agent. MUST use validator's API_BASE_URL and API_KEY."""
     
-    # ---- ENVIRONMENT AUDIT (print ALL relevant env vars for debugging) ----
-    print(f"[DEBUG] ===== ENVIRONMENT AUDIT =====", flush=True)
-    for key in sorted(os.environ.keys()):
-        k = key.upper()
-        if any(x in k for x in ["API", "URL", "BASE", "MODEL", "KEY", "ENV", "PORT", "OPENAI"]):
-            val = os.environ[key]
-            masked = val[:8] + "..." if len(val) > 10 else val
-            print(f"[DEBUG]   {key} = {masked}", flush=True)
-    print(f"[DEBUG] ===== END AUDIT =====", flush=True)
-    
     # ---- VALIDATION ----
     if not API_BASE_URL:
-        print(f"[ERROR] No LLM proxy URL found! Checked: API_BASE_URL, OPENAI_API_BASE, OPENAI_BASE_URL", flush=True)
         # Fail gracefully for all tasks if no URL
         for t in TASKS_TO_TEST:
             log_start(task=t, env="lexenv", model=MODEL_NAME)
@@ -230,16 +219,12 @@ async def main() -> None:
         sys.exit(1)
     
     if not API_KEY:
-        print(f"[ERROR] No API key found! Checked: API_KEY, OPENAI_API_KEY, HF_TOKEN", flush=True)
+        # Fail gracefully for all tasks if no URL
         for t in TASKS_TO_TEST:
             log_start(task=t, env="lexenv", model=MODEL_NAME)
             log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
     
-    print(f"[DEBUG] Using LLM proxy: {API_BASE_URL}", flush=True)
-    print(f"[DEBUG] Using ENV_URL: {ENV_URL}", flush=True)
-    print(f"[DEBUG] Using MODEL: {MODEL_NAME}", flush=True)
-
     # ---- INITIALIZE MULTIPLE CLIENT CONFIGS ----
     # Try the URL as-is AND with /v1 appended, to handle both proxy formats
     base_url_raw = API_BASE_URL.rstrip("/")
@@ -253,7 +238,6 @@ async def main() -> None:
     
     openai_clients = []
     for url in url_candidates:
-        print(f"[DEBUG] Prepared LLM client for: {url}", flush=True)
         openai_clients.append(AsyncOpenAI(base_url=url, api_key=API_KEY))
     
     env_client = EnvClient(ENV_URL)
@@ -323,10 +307,7 @@ async def main() -> None:
                 
                 history.append(f"Step {step}: {action_str}")
                 
-                print(f"[DEBUG] Step {step} complete: reward={reward:.3f}, done={done}", flush=True)
-                
                 if done:
-                    print(f"[DEBUG] Episode ended (done=True)", flush=True)
                     break
                 
                 # Update observation for next step
@@ -339,10 +320,7 @@ async def main() -> None:
             score = max(0.01, min(0.99, score))
             success = score >= SUCCESS_SCORE_THRESHOLD
             
-            print(f"[DEBUG] Final score: {score:.3f}, success={success}", flush=True)
-            
         except Exception as e:
-            print(f"[ERROR] Episode failed: {type(e).__name__}: {str(e)}", flush=True)
             import traceback
             traceback.print_exc()
             score = max(0.01, min(0.99, score))
