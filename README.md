@@ -139,13 +139,14 @@ A stronger model (Mixtral 8x7B or Llama3 70B) should reach **0.80+** on Task 1 a
 pip install -r requirements.txt
 
 # Start server
-uvicorn server.app:app --host 0.0.0.0 --port 8000
+uvicorn server.app:app --host 0.0.0.0 --port 7860
 
 # Run baseline inference (in a separate terminal)
-export OPENAI_API_KEY=gsk_...   # Groq key, or set HF_TOKEN
+export API_KEY=your-api-key
 export API_BASE_URL=https://api.groq.com/openai/v1
 export MODEL_NAME=llama3-8b-8192
 export LEXENV_TASK=clause_id    # or sla_review, ma_assessment
+export ENV_URL=http://localhost:7860
 python inference.py
 ```
 
@@ -153,8 +154,8 @@ python inference.py
 
 ```bash
 docker build -t lexenv .
-docker run -p 8000:8000 \
-  -e OPENAI_API_KEY=gsk_... \
+docker run -p 7860:7860 \
+  -e API_KEY=your-api-key \
   -e API_BASE_URL=https://api.groq.com/openai/v1 \
   lexenv
 ```
@@ -172,12 +173,12 @@ openenv validate .
 
 **Reset:**
 ```bash
-curl -X POST "http://localhost:8000/reset?task_id=clause_id"
+curl -X POST "http://localhost:7860/reset?task_id=clause_id"
 ```
 
 **Step:**
 ```bash
-curl -X POST http://localhost:8000/step \
+curl -X POST http://localhost:7860/step \
   -H "Content-Type: application/json" \
   -d '{
     "analysis": "The non-compete clause in Section 2 is overbroad — 5 years worldwide exceeds any reasonable scope. Section 3 assigns all IP in perpetuity which is highly dangerous.",
@@ -190,7 +191,7 @@ curl -X POST http://localhost:8000/step \
 
 **State:**
 ```bash
-curl http://localhost:8000/state
+curl http://localhost:7860/state
 ```
 
 ---

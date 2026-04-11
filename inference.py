@@ -18,12 +18,17 @@ import httpx
 # CONFIGURATION - STRICTLY USE VALIDATOR'S CREDENTIALS
 # ============================================================================
 
-# THESE MUST BE SET BY VALIDATOR - checking multiple possible names for resilience
-API_BASE_URL = os.getenv("API_BASE_URL") or os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_BASE_URL")
+# Check multiple possible env var names for resilience
+API_BASE_URL = (
+    os.getenv("API_BASE_URL")
+    or os.getenv("OPENAI_API_BASE")
+    or os.getenv("OPENAI_BASE_URL")
+)
 API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4"
 
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
+# Environment URL: default to port 7860 (matching our server/Dockerfile)
+ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
 
 MAX_STEPS = 5
@@ -73,18 +78,21 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
 
 class EnvClient:
     def __init__(self, base_url: str):
-        self.base_url = base_url
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.base_url = base_url.rstrip("/")
+        self.client = httpx.AsyncClient(timeout=60.0)
     
     async def reset(self, task_id: str) -> Dict[str, Any]:
         url = f"{self.base_url}/reset?task_id={task_id}"
+        print(f"[DEBUG] Env reset URL: {url}", flush=True)
         response = await self.client.post(url)
         response.raise_for_status()
         return response.json()
     
     async def step(self, action: Dict[str, Any]) -> Dict[str, Any]:
         url = f"{self.base_url}/step"
-        response = await self.client.post(url, json=action)
+        # OpenEnv spec requires action wrapped in {"action": {...}}
+        payload = {"action": action}
+        response = await self.client.post(url, json=payload)
         response.raise_for_status()
         return response.json()
     
@@ -108,7 +116,7 @@ async def call_llm_model(
     Raises exception if API call fails.
     """
     
-    print(f"[DEBUG] STEP {step}: Calling LLM at {API_BASE_URL}", flush=True)
+    print(f"[DEBUG] STEP {step}: Calling LLM via proxy", flush=True)
     
     user_prompt = textwrap.dedent(f"""
         CONTRACT EXCERPT:
@@ -120,44 +128,38 @@ async def call_llm_model(
         {{"analysis": "detailed text", "flags": [{{...}}], "risk_assessment": "high"}}
     """).strip()
     
+    # VALIDATOR WILL MONITOR THIS CALL
+    response = await client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS
+    )
+    
+    text = (response.choices[0].message.content or "").strip()
+    print(f"[DEBUG] LLM response received ({len(text)} chars)", flush=True)
+    
+    # Parse JSON
     try:
-        # VALIDATOR WILL MONITOR THIS CALL
-        response = await client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS
-        )
-        
-        text = (response.choices[0].message.content or "").strip()
-        print(f"[DEBUG] LLM response received ({len(text)} chars)", flush=True)
-        
-        # Parse JSON
-        try:
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            if start >= 0 and end > start:
-                json_str = text[start:end]
-                action = json.loads(json_str)
-                print(f"[DEBUG] Parsed JSON action successfully", flush=True)
-                return action
-        except json.JSONDecodeError:
-            pass
-        
-        # If JSON parsing fails, create basic structure from response
-        return {
-            "analysis": text[:500] if text else "Analysis complete",
-            "flags": [],
-            "risk_assessment": "medium"
-        }
-        
-    except Exception as e:
-        # FAIL LOUDLY - don't hide API errors
-        print(f"[ERROR] LLM API CALL FAILED: {type(e).__name__}: {str(e)}", flush=True)
-        raise  # Re-raise to fail the whole script
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            json_str = text[start:end]
+            action = json.loads(json_str)
+            print(f"[DEBUG] Parsed JSON action successfully", flush=True)
+            return action
+    except json.JSONDecodeError:
+        pass
+    
+    # If JSON parsing fails, create basic structure from response
+    return {
+        "analysis": text[:500] if text else "Analysis complete",
+        "flags": [],
+        "risk_assessment": "medium"
+    }
 
 
 # ============================================================================
@@ -167,89 +169,81 @@ async def call_llm_model(
 async def main() -> None:
     """Run agent. MUST use validator's API_BASE_URL and API_KEY."""
     
+    # ---- ENVIRONMENT AUDIT (print ALL relevant env vars for debugging) ----
+    print(f"[DEBUG] ===== ENVIRONMENT AUDIT =====", flush=True)
+    for key in sorted(os.environ.keys()):
+        k = key.upper()
+        if any(x in k for x in ["API", "URL", "BASE", "MODEL", "KEY", "ENV", "PORT", "OPENAI"]):
+            # Mask values for security but show they exist
+            val = os.environ[key]
+            masked = val[:8] + "..." if len(val) > 10 else val
+            print(f"[DEBUG]   {key} = {masked}", flush=True)
+    print(f"[DEBUG] ===== END AUDIT =====", flush=True)
+    
     # ---- VALIDATION ----
     if not API_BASE_URL:
-        print(f"[ERROR] API_BASE_URL not set by validator!", flush=True)
+        print(f"[ERROR] No LLM proxy URL found! Checked: API_BASE_URL, OPENAI_API_BASE, OPENAI_BASE_URL", flush=True)
         log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
         log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
     
     if not API_KEY:
-        print(f"[ERROR] API_KEY not set by validator!", flush=True)
+        print(f"[ERROR] No API key found! Checked: API_KEY, OPENAI_API_KEY", flush=True)
         log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
         log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
     
-    # ---- ENVIRONMENT AUDIT (DEBUGGING) ----
-    print(f"[DEBUG] Environment variable keys available at startup:", flush=True)
-    for key in sorted(os.environ.keys()):
-        if any(x in key.upper() for x in ["API", "URL", "BASE", "MODEL", "KEY"]):
-            print(f"[DEBUG]   Detected Key: {key}", flush=True)
-    
-    print(f"[DEBUG] Identified validator credentials:", flush=True)
-    print(f"[DEBUG]   Found API_BASE_URL: {bool(API_BASE_URL)}", flush=True)
-    print(f"[DEBUG]   Found API_KEY: {bool(API_KEY)}", flush=True)
-    print(f"[DEBUG]   MODEL_NAME: {MODEL_NAME}", flush=True)
-    
-    # ---- INITIALIZE ----
-    try:
-        # MUST use validator's credentials
-        # FINAL HARDENING: Sanitize URL and ensure /v1 suffix.
-        # Many proxies (like LiteLLM) require this to route correctly.
-        base_url = (API_BASE_URL or "").strip().rstrip("/")
-        
-        # Strip accidental /chat/completions if the user/platform provided a full endpoint
-        if base_url.endswith("/chat/completions"):
-            base_url = base_url.replace("/chat/completions", "").rstrip("/")
-            
-        if not base_url.endswith("/v1"):
-            base_url += "/v1"
-            
-        print(f"[DEBUG] Sanitized Base URL being used: {base_url}", flush=True)
+    print(f"[DEBUG] Using LLM proxy: {API_BASE_URL}", flush=True)
+    print(f"[DEBUG] Using ENV_URL: {ENV_URL}", flush=True)
+    print(f"[DEBUG] Using MODEL: {MODEL_NAME}", flush=True)
 
-        openai_client = AsyncOpenAI(base_url=base_url, api_key=API_KEY)
-        env_client = EnvClient(ENV_URL)
-        
-        history: List[str] = []
-        rewards: List[float] = []
-        steps_taken = 0
-        score = 0.01
-        
-        log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
-        
+    # ---- INITIALIZE ----
+    # Use API_BASE_URL EXACTLY as provided by the validator — no sanitization.
+    # The OpenAI Python client handles path routing internally.
+    openai_client = AsyncOpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY,
+    )
+    env_client = EnvClient(ENV_URL)
+    
+    history: List[str] = []
+    rewards: List[float] = []
+    steps_taken = 0
+    score = 0.01
+    success = False
+    
+    log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
+    
+    try:
         # ---- RESET ENVIRONMENT ----
         print(f"[DEBUG] Resetting environment with task={TASK_NAME}", flush=True)
         reset_result = await env_client.reset(TASK_NAME)
-        observation = reset_result.get("observation", {})
+        observation = reset_result.get("observation", reset_result)
+        print(f"[DEBUG] Reset successful, got observation keys: {list(observation.keys()) if isinstance(observation, dict) else 'not-dict'}", flush=True)
         
-        # ---- MAIN LOOP ----
+        # ---- MAIN LOOP: LLM call → env step ----
         for step in range(1, MAX_STEPS + 1):
             print(f"[DEBUG] ===== STEP {step} =====", flush=True)
             
-            if observation.get("max_steps", MAX_STEPS) > 0 and step > observation.get("max_steps"):
-                print(f"[DEBUG] Reached max_steps, ending episode", flush=True)
+            max_steps_from_obs = observation.get("max_steps", MAX_STEPS) if isinstance(observation, dict) else MAX_STEPS
+            if max_steps_from_obs > 0 and step > max_steps_from_obs:
+                print(f"[DEBUG] Reached max_steps={max_steps_from_obs}, ending", flush=True)
                 break
             
             # ---- CALL LLM (VALIDATOR MONITORS THIS) ----
-            try:
-                action_dict = await call_llm_model(
-                    client=openai_client,
-                    step=step,
-                    contract_excerpt=observation.get("contract_excerpt", ""),
-                    instruction=observation.get("instruction", ""),
-                )
-                print(f"[DEBUG] Step {step}: Got LLM response", flush=True)
-            except Exception as e:
-                print(f"[ERROR] Step {step}: LLM call failed, cannot continue", flush=True)
-                print(f"[ERROR] {type(e).__name__}: {str(e)}", flush=True)
-                raise  # Fail loudly - don't fallback
+            contract_text = observation.get("contract_excerpt", "") if isinstance(observation, dict) else ""
+            instr_text = observation.get("instruction", "") if isinstance(observation, dict) else ""
+            
+            action_dict = await call_llm_model(
+                client=openai_client,
+                step=step,
+                contract_excerpt=contract_text,
+                instruction=instr_text,
+            )
+            print(f"[DEBUG] Step {step}: Got LLM response", flush=True)
             
             # ---- SUBMIT TO ENVIRONMENT ----
-            try:
-                step_result = await env_client.step(action_dict)
-            except Exception as e:
-                print(f"[ERROR] Step {step}: Environment step failed: {e}", flush=True)
-                raise
+            step_result = await env_client.step(action_dict)
             
             # ---- PROCESS RESULT ----
             reward = step_result.get("reward", 0.01) or 0.01
@@ -264,17 +258,16 @@ async def main() -> None:
             
             history.append(f"Step {step}: {action_str}")
             
-            print(f"[DEBUG] Step {step} complete: reward={reward:.2f}, done={done}", flush=True)
+            print(f"[DEBUG] Step {step} complete: reward={reward:.3f}, done={done}", flush=True)
             
             if done:
                 print(f"[DEBUG] Episode ended (done=True)", flush=True)
                 break
             
-            observation = step_result.get("observation", observation)
+            # Update observation for next step
+            observation = step_result.get("observation", step_result)
         
         # ---- CALCULATE FINAL SCORE ----
-        print(f"[DEBUG] Episode complete: {steps_taken} steps, {len(rewards)} rewards", flush=True)
-        
         if rewards:
             score = sum(rewards) / len(rewards)
         
@@ -287,16 +280,19 @@ async def main() -> None:
         print(f"[ERROR] Episode failed: {type(e).__name__}: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
-        score = 0.01
+        score = max(0.01, min(0.99, score))
         success = False
+        exit_code = 1
     
     finally:
         try:
             await env_client.close()
-        except:
+        except Exception:
             pass
         
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+        if 'exit_code' in locals() and exit_code != 0:
+            sys.exit(exit_code)
 
 
 # ============================================================================
