@@ -425,24 +425,6 @@ MA_GROUND_TRUTH = [
 
 
 # ============================================================================
-# TASK 4: CONTRACT NEGOTIATION SIMULATION (MEDIUM)
-# ============================================================================
-
-CONTRACT_NEGOTIATION = {
-    "id": "contract_negotiation",
-    "name": "Contract Negotiation Simulation",
-    "description": (
-        "Agent negotiates a contract to maximize client benefit while ensuring "
-        "compliance with legal standards. Includes 5 planted negotiation pitfalls: "
-        "vague terms, missing clauses, unfair penalties, etc."
-    ),
-    "difficulty": "medium",
-    "max_steps": 4,
-    "grader": "lexenv.graders:LexGrader",
-}
-
-
-# ============================================================================
 # TASK REGISTRY
 # ============================================================================
 
@@ -487,27 +469,12 @@ TASK_DATA = {
         "max_steps": 5,
         "expected_issues": 10,
     },
-    "contract_negotiation": {
-        "name": "Contract Negotiation Simulation",
-        "difficulty": 2,
-        "contract": CONTRACT_NEGOTIATION,
-        "ground_truth": [],
-        "instruction": "Agent negotiates a contract to maximize client benefit while ensuring compliance with legal standards. Includes 5 planted negotiation pitfalls: vague terms, missing clauses, unfair penalties, etc.",
-        "max_steps": 4,
-        "expected_issues": 0,
-    },
 }
 
 
 def get_task_data(task_id: str) -> Dict[str, Any]:
     """Retrieve task configuration by ID"""
-    tasks = {
-        "clause_id": NDA_CONTRACT,
-        "sla_review": SLA_CONTRACT,
-        "ma_assessment": MA_CONTRACT,
-        "contract_negotiation": CONTRACT_NEGOTIATION,
-    }
-    return tasks.get(task_id)
+    return TASK_DATA.get(task_id)
 
 
 def list_tasks() -> List[Dict[str, Any]]:

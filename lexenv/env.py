@@ -48,14 +48,14 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
 
         Parameters
         ----------
-        task_id : "clause_id" | "sla_review" | "ma_assessment" | "contract_negotiation"  (default: clause_id)
+        task_id : "clause_id" | "sla_review" | "ma_assessment"  (default: clause_id)
         seed    : reserved for future stochastic tasks (currently ignored)
         """
         task_data = get_task_data(task_id)
         if task_data is None:
             raise ValueError(
                 f"Unknown task_id '{task_id}'. "
-                "Available: clause_id, sla_review, ma_assessment, contract_negotiation"
+                "Available: clause_id, sla_review, ma_assessment"
             )
 
         self._state = LexState(
