@@ -104,13 +104,31 @@ body {
     margin-bottom: 12px;
 }
 
+.select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.select-wrapper::after {
+    content: '▼';
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
 .select-wrapper select {
     width: 100%;
-    background: rgba(255, 255, 255, 0.03);
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(18, 18, 26, 0.8);
     border: 1px solid var(--border-glass);
     border-radius: 8px;
     color: var(--text-pure);
-    padding: 12px;
+    padding: 12px 35px 12px 15px;
     font-family: var(--font-mono);
     font-size: 0.85rem;
     cursor: pointer;
@@ -118,8 +136,20 @@ body {
     transition: 0.2s;
 }
 
+.select-wrapper select option {
+    background: var(--bg-slate);
+    color: var(--text-pure);
+    padding: 10px;
+}
+
 .select-wrapper select:hover {
     border-color: var(--accent-violet);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.select-wrapper select:focus {
+    border-color: var(--accent-violet);
+    box-shadow: 0 0 10px var(--accent-glow);
 }
 
 .btn-group {

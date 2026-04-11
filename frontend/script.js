@@ -26,6 +26,18 @@ const elements = {
 };
 
 /**
+ * Session Persistence
+ */
+const getSessionId = () => {
+    let sid = sessionStorage.getItem('lex_session_id');
+    if (!sid) {
+        sid = 'sess_' + Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('lex_session_id', sid);
+    }
+    return sid;
+};
+
+/**
  * Enhanced Logging with auto-scroll
  */
 function logMsg(msg, type = 'sys') {
@@ -48,11 +60,14 @@ function logMsg(msg, type = 'sys') {
  */
 async function loadTasks() {
     try {
-        const res = await fetch('/tasks');
+        const res = await fetch('/tasks', {
+            headers: { 'X-Session-ID': getSessionId() }
+        });
         const data = await res.json();
+        const tasks = data.tasks || data;
         
         elements.taskSelect.innerHTML = '<option value="" disabled selected>Select Task...</option>';
-        data.tasks.forEach(t => {
+        tasks.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
             opt.textContent = t.name;
@@ -92,25 +107,22 @@ function updateStateUI(state) {
     // Stats
     const prog = obs.progress || {};
     elements.statStep.textContent = `${prog.step || 0} / ${prog.max_steps || 0}`;
+
+    // Update reward displays if available
+    const reward = state.reward || 0;
+    const currentScore = parseFloat(elements.statScore.textContent);
+    elements.statScore.textContent = (currentScore + reward).toFixed(2);
+    elements.statDelta.textContent = (reward >= 0 ? '+' : '') + reward.toFixed(2);
+    elements.statDelta.style.color = reward >= 0 ? 'var(--pos-green)' : 'var(--neg-red)';
     
     // Action Controls
     elements.btnRun.disabled = state.done;
     
     if (state.done) {
-        elements.actionInput.value = '';
-        elements.actionInput.placeholder = 'OS Session Ended.';
         elements.actionInput.disabled = true;
-        logMsg(`Episode Terminated. Efficiency: ${prog.step}/${prog.max_steps}`, 'sys');
+        logMsg(`Episode Terminated. Final Score: ${elements.statScore.textContent}`, 'sys');
     } else {
         elements.actionInput.disabled = false;
-        // Smart Template Pre-fill
-        if (!elements.actionInput.value || elements.actionInput.value.includes("Enter your analysis")) {
-            elements.actionInput.value = JSON.stringify({
-                analysis: "Synthesizing legal risks...",
-                flags: [],
-                risk_assessment: "medium"
-            }, null, 2);
-        }
     }
 }
 
@@ -119,19 +131,19 @@ function updateStateUI(state) {
  */
 async function actReset() {
     const taskId = elements.taskSelect.value;
-    if (!taskId) {
-        logMsg('ERR: Select task definition code first.');
-        return;
-    }
+    if (!taskId) return;
     
     elements.btnReset.disabled = true;
     logMsg(`Mounting task environment: ${taskId}`, 'sys');
     
     try {
-        const res = await fetch(`/reset?task_id=${taskId}`, { method: 'POST' });
+        const res = await fetch(`/reset?task_id=${taskId}`, { 
+            method: 'POST',
+            headers: { 'X-Session-ID': getSessionId() }
+        });
         const data = await res.json();
         
-        // Zero out UI
+        // Zero out UI stats
         elements.statScore.textContent = '0.00';
         elements.statDelta.textContent = '0.00';
         elements.statDelta.style.color = 'var(--pos-green)';
@@ -150,43 +162,28 @@ async function actReset() {
  * Execute Step/Action
  */
 async function actRun() {
-    let actionData;
-    try {
-        actionData = JSON.parse(elements.actionInput.value);
-    } catch (e) {
-        logMsg('PARSE ERR: Invalid JSON payload in buffer.');
-        return;
-    }
+    const action = elements.actionInput.value;
+    if (!action.trim()) return;
     
     elements.btnRun.disabled = true;
     logMsg('Processing inference step...', 'sys');
     
     try {
+        const payload = {
+            action: { "analysis": action, "risk_assessment": "high" }
+        };
+
         const res = await fetch('/step', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: actionData })
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Session-ID': getSessionId()
+            },
+            body: JSON.stringify(payload)
         });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        
-        // Update flags
-        if (actionData.flags && actionData.flags.length > 0) {
-            const flagsHtml = actionData.flags.map(f => `
-                <div class="flag">
-                    <strong style="color:var(--accent-violet)">[${(f.severity || 'low').toUpperCase()}]</strong> 
-                    ${f.title}
-                </div>
-            `).join('');
-            elements.flagsContainer.innerHTML = flagsHtml;
-        }
-        
-        // Visual stat update
-        const reward = data.reward || 0;
-        const currentScore = parseFloat(elements.statScore.textContent);
-        elements.statScore.textContent = (currentScore + reward).toFixed(2);
-        
-        elements.statDelta.textContent = (reward >= 0 ? '+' : '') + reward.toFixed(2);
-        elements.statDelta.style.color = reward >= 0 ? 'var(--pos-green)' : 'var(--neg-red)';
         
         updateStateUI(data);
         logMsg(`Step ${data.observation.step} processed. Reward calculated.`, 'ready');
@@ -202,9 +199,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnReset.addEventListener('click', actReset);
     elements.btnRun.addEventListener('click', actRun);
     
-    // Update task description on select
+    // Update task and AUTO-RESET on change
     elements.taskSelect.addEventListener('change', () => {
         const selected = elements.taskSelect.options[elements.taskSelect.selectedIndex];
         elements.taskBrief.textContent = selected.dataset.desc;
+        actReset(); // Auto-sync
     });
 });
