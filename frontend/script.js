@@ -165,7 +165,7 @@ async function actRun() {
         const res = await fetch('/step', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(actionData)
+            body: JSON.stringify({ action: actionData })
         });
         const data = await res.json();
         
