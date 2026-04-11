@@ -10,18 +10,34 @@ class ToneGrader:
     """LLM-as-a-judge specifically for evaluating legal writing quality."""
     
     def __init__(self, model_name: Optional[str] = None):
-        self.api_key = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
-        self.base_url = os.getenv("API_BASE_URL")
+        # Improved lookup to handle various proxy/HF naming conventions
+        self.api_key = (
+            os.getenv("API_KEY") 
+            or os.getenv("OPENAI_API_KEY") 
+            or os.getenv("HF_TOKEN")
+            or os.getenv("HF_API_KEY")
+        )
+        self.base_url = (
+            os.getenv("API_BASE_URL")
+            or os.getenv("OPENAI_API_BASE")
+            or os.getenv("OPENAI_BASE_URL")
+        )
         self.model_name = model_name or os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
         
         if self.api_key:
+            # Ensure the base URL has /v1 if it looks like a standard OpenAI-compatible proxy
+            # but only if not already present.
+            effective_url = self.base_url
+            if effective_url and not effective_url.rstrip("/").endswith("/v1") and "huggingface" not in effective_url:
+                effective_url = effective_url.rstrip("/") + "/v1"
+
             self.client = AsyncOpenAI(
                 api_key=self.api_key,
-                base_url=self.base_url if self.base_url else None
+                base_url=effective_url if effective_url else None
             )
         else:
             self.client = None
-            logger.warning("ToneGrader: No API key found. LLM grading will be skipped.")
+            logger.warning("ToneGrader: No API key found. Check your Space Secrets (API_KEY or HF_TOKEN).")
 
     async def evaluate_tone(self, analysis: str, task_name: str) -> Dict[str, Any]:
         """

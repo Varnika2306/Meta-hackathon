@@ -14,12 +14,23 @@ from lexenv.data.contracts import get_task_data
 from lexenv.graders import create_grader_for_task
 from lexenv.llm_grader import ToneGrader
 
+import json
+import logging
+import os
+import shutil
+
 # ============================================================================
-# Global Persistence Registry (Handles multi-user session survival)
+# Inter-Process Persistence Registry (Handles multi-worker process survival)
 # ============================================================================
-_REGISTRY_LOCK = threading.Lock()
-_STATE_REGISTRY: Dict[str, LexState] = {}
-_GRADER_REGISTRY: Dict[str, Any] = {}
+PERSISTENCE_DIR = "/tmp/lexenv_persistence"
+STATE_FILE = os.path.join(PERSISTENCE_DIR, "states.json")
+
+def _init_persistence():
+    if not os.path.exists(PERSISTENCE_DIR):
+        os.makedirs(PERSISTENCE_DIR, exist_ok=True)
+    if not os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'w') as f:
+            json.dump({}, f)
 
 class LexEnv(Environment[LexAction, LexObservation, LexState]):
     """
@@ -37,25 +48,51 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         self._episode_history: List[Dict[str, Any]] = []
 
     def _recover_session(self, session_id: Optional[str]) -> bool:
-        """Attempt to recover state/grader from the global registry."""
+        """Attempt to recover state from the shared file-backed registry."""
         if not session_id:
             return False
         
-        with _REGISTRY_LOCK:
-            if session_id in _STATE_REGISTRY:
-                self._state = _STATE_REGISTRY[session_id]
-                self._grader = _GRADER_REGISTRY.get(session_id)
-                return True
+        _init_persistence()
+        try:
+            with _REGISTRY_LOCK:
+                with open(STATE_FILE, 'r') as f:
+                    registry = json.load(f)
+                
+                if session_id in registry:
+                    state_data = registry[session_id]
+                    self._state = LexState(**state_data)
+                    # Re-initialize grader for this task
+                    self._grader = create_grader_for_task(self._state.task_id)
+                    return True
+        except Exception as e:
+            print(f"DEBUG: Session recovery failed: {e}")
         return False
 
     def _persist_session(self, session_id: Optional[str]):
-        """Save current state/grader to the global registry."""
-        if not session_id:
+        """Save current state to the shared file-backed registry."""
+        if not session_id or not self._state:
             return
             
-        with _REGISTRY_LOCK:
-            _STATE_REGISTRY[session_id] = self._state
-            _GRADER_REGISTRY[session_id] = self._grader
+        _init_persistence()
+        try:
+            with _REGISTRY_LOCK:
+                # Load existing
+                if os.path.exists(STATE_FILE):
+                    with open(STATE_FILE, 'r') as f:
+                        registry = json.load(f)
+                else:
+                    registry = {}
+                
+                # Update
+                registry[session_id] = self._state.model_dump()
+                
+                # Atomic-ish write
+                temp_file = STATE_FILE + ".tmp"
+                with open(temp_file, 'w') as f:
+                    json.dump(registry, f)
+                shutil.move(temp_file, STATE_FILE)
+        except Exception as e:
+            print(f"DEBUG: Session persistence failed: {e}")
 
     # ------------------------------------------------------------------ #
     # reset (sync — required by Environment ABC)                           #
