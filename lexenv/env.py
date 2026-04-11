@@ -139,9 +139,9 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             previous_feedback=f"Step {step_num} reward: {step_reward:.3f}",
         )
         
-        # FINAL PROTECTION: When done, the reward is the total episode score.
-        # This is what most validators expect for final grading.
-        obs.reward = self._state.episode_score if done else step_reward
+        # Report the partial step reward (strictly clamped 0.01-0.99).
+        # The inference.py script will calculate the final score by averaging these.
+        obs.reward = step_reward
         obs.done = done
         return obs
 
