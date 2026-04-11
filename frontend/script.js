@@ -127,6 +127,21 @@ function updateStateUI(state) {
     elements.toneBar.style.width = `${toneScore * 100}%`;
     elements.toneFeedback.textContent = tone.feedback || 'Legalese quality being appraised...';
 
+    // Update Risk Flags
+    const flags = obs.identified_flags || [];
+    if (flags.length > 0) {
+        elements.flagsContainer.innerHTML = '';
+        flags.forEach(f => {
+            const badge = document.createElement('div');
+            badge.className = `flag-badge sev-${(f.severity || 'medium').toLowerCase()}`;
+            badge.innerHTML = `
+                <span class="flag-title">${f.title}</span>
+                <span class="flag-sev">${f.severity.toUpperCase()}</span>
+            `;
+            elements.flagsContainer.appendChild(badge);
+        });
+    }
+
     // Action Controls
     const isDone = state.done || obs.done;
     elements.btnRun.disabled = isDone;

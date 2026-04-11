@@ -55,6 +55,7 @@ class LexObservation(Observation):
     max_steps: int = Field(..., description="Maximum steps allowed")
     previous_analysis: Optional[str] = Field(None, description="Previous step feedback")
     tone_analysis: Dict[str, Any] = Field(default_factory=dict, description="LLM tone appraisal")
+    identified_flags: List[Dict[str, Any]] = Field(default_factory=list, description="All issues found so far")
     progress: Dict[str, Any] = Field(default_factory=dict, description="Progress tracking")
 
 
@@ -70,3 +71,4 @@ class LexState(State):
     episode_score: float = Field(default=0.01)
     step_rewards: List[float] = Field(default_factory=list)
     actions_history: List[Dict[str, Any]] = Field(default_factory=list)
+    identified_flags: List[Dict[str, Any]] = Field(default_factory=list)

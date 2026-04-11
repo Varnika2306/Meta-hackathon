@@ -131,6 +131,15 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             tone_score=kwargs.get("tone_score", 0.0),
             tone_feedback=kwargs.get("tone_feedback", "")
         )
+
+        # Update unique flags found so far
+        new_issues = reward_breakdown.get("matched_issues", [])
+        existing_ids = {f["id"] for f in self._state.identified_flags}
+        for issue in new_issues:
+            if issue["id"] not in existing_ids:
+                self._state.identified_flags.append(issue)
+                existing_ids.add(issue["id"])
+
         step_reward: float = max(0.01, min(0.99, reward_breakdown["total_step_reward"]))
         self._state.step_rewards.append(step_reward)
 
@@ -212,6 +221,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             max_steps=max_steps,
             previous_analysis=previous_feedback,
             tone_analysis=tone_results if tone_results else {},
+            identified_flags=self._state.identified_flags if self._state else [],
             progress={
                 "step": step,
                 "max_steps": max_steps,

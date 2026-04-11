@@ -216,6 +216,9 @@ class LexGrader:
         
         total_reward = max(0.01, min(0.99, step_score + early_bonus + quality_bonus + risk_match + tone_bonus))
         
+        # Get full issue objects for the UI
+        matched_issues = [issue for issue in self.ground_truth if issue["id"] in matched_ids]
+
         return {
             "per_step_score": step_score,
             "efficiency_bonus": early_bonus,
@@ -223,6 +226,7 @@ class LexGrader:
             "tone_professionalism": tone_bonus,
             "risk_match_bonus": risk_match,
             "tone_feedback": tone_feedback,
+            "matched_issues": matched_issues,
             "total_step_reward": total_reward
         }
 
