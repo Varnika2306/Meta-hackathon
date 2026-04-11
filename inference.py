@@ -22,7 +22,7 @@ API_BASE_URL = (
     or os.getenv("OPENAI_API_BASE")
     or os.getenv("OPENAI_BASE_URL")
 )
-API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
+API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY") or os.getenv("HF_TOKEN")
 MODEL_NAME = os.getenv("MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4o"
 
 ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
