@@ -17,6 +17,7 @@ tasks:
     name: NDA Clause Identification
     difficulty: easy
     max_steps: 3
+    has_grader: true
     description: >
       Agent reads a Non-Disclosure Agreement and flags risky clauses:
       overbroad non-compete (5yr worldwide), blanket IP assignment,
@@ -26,6 +27,7 @@ tasks:
     name: SLA Contract Review
     difficulty: medium
     max_steps: 4
+    has_grader: true
     description: >
       Agent reviews a Service Level Agreement with 8 planted defects:
       no numeric uptime SLA, $500 liability cap, undefined incident timelines,
@@ -35,6 +37,7 @@ tasks:
     name: M&A Due Diligence Risk Assessment
     difficulty: hard
     max_steps: 5
+    has_grader: true
     description: >
       Agent analyzes a merger agreement excerpt with 10 multi-layered risks:
       undisclosed tax audits, $2.3M hidden liability, overbroad MAE carve-outs,

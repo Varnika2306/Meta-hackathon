@@ -88,8 +88,8 @@ class LexGrader:
         match_confidences = []
         
         if not agent_analysis or len(agent_analysis.strip()) < 50:
-            # Penalty for too-short analysis
-            return max(0.0, -0.05), [], []
+            # Penalty for too-short analysis (must be > 0.0)
+            return 0.01, [], []
         
         for issue in self.ground_truth:
             keywords = issue.get("keywords", [])
