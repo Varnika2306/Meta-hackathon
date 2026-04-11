@@ -17,6 +17,7 @@ COPY server/ ./server/
 COPY inference.py .
 COPY pyproject.toml .
 COPY openenv.yaml .
+COPY frontend/ ./frontend/
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
