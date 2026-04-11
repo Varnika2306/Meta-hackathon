@@ -24,7 +24,7 @@ API_BASE_URL = (
     or os.getenv("OPENAI_API_BASE")
     or os.getenv("OPENAI_BASE_URL")
 )
-API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
+API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
 MODEL_NAME = os.getenv("MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4o"
 
 # Environment URL: default to port 7860 (matching our server/Dockerfile)
@@ -225,7 +225,7 @@ async def main() -> None:
         sys.exit(1)
     
     if not API_KEY:
-        print(f"[ERROR] No API key found! Checked: API_KEY, OPENAI_API_KEY", flush=True)
+        print(f"[ERROR] No API key found! Checked: API_KEY, OPENAI_API_KEY, HF_TOKEN", flush=True)
         log_start(task=TASK_NAME, env="lexenv", model=MODEL_NAME)
         log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
