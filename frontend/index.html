@@ -3,91 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LexEnv Dashboard</title>
+    <title>LexEnv | AI Legal OS</title>
+    <!-- Modern Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="top-nav">
-        <div class="nav-brand">
-            <span class="logo">LexEnv</span>
-            <span class="subtitle">AI Legal Analysis Environment</span>
-        </div>
-        <div class="nav-controls">
-            <select id="task-select">
-                <option value="" disabled selected>Loading tasks...</option>
-            </select>
-            <button id="btn-reset" class="btn btn-secondary">RESET</button>
-            <button id="btn-run" class="btn btn-primary" disabled>SUBMIT ACTION</button>
-        </div>
-    </div>
-
-    <div class="main-layout">
-        <!-- Left Panel: Context & Instructions -->
-        <div class="panel panel-left">
-            <div class="panel-header">
-                <h3>ENVIRONMENT CONTEXT</h3>
+    <div class="obsidian-app">
+        <!-- Sidebar Navigation & Control -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="logo-box"></div>
+                    <h1>LexEnv</h1>
+                    <span class="version">v1.2</span>
+                </div>
             </div>
-            <div class="panel-content">
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <label>ACTIVE TASK</label>
+                    <div class="select-wrapper">
+                        <select id="task-select">
+                            <option value="" disabled selected>Enumerating tasks...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <label>SIMULATION CONTROLS</label>
+                    <div class="btn-group">
+                        <button id="btn-reset" class="btn btn-reset">
+                            <span class="icon">↺</span> RESET
+                        </button>
+                        <button id="btn-run" class="btn btn-run" disabled>
+                            <span class="icon">▶</span> RUN STEP
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <label>SYSTEM CONSOLE</label>
                 <div id="logs-container">
-                    <p class="sys-msg fade-in">> [SYSTEM] LexEnv core standing by.</p>
-                    <p class="sys-msg">> Please select a task and press RESET to begin.</p>
+                    <div class="log-entry sys">Waiting for link...</div>
                 </div>
-                
-                <div id="context-wrapper" class="hidden">
-                    <div class="info-block">
-                        <span class="label">INSTRUCTION</span>
-                        <div id="instruction-text" class="content-text"></div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <header class="workspace-header">
+                <div class="header-info">
+                    <h2 id="task-name-display">Select Task</h2>
+                    <p id="task-brief">Legal Document Analysis Environment</p>
+                </div>
+                <div class="header-stats">
+                    <div class="mini-stat">
+                        <span class="label">SCORE</span>
+                        <span id="stat-score" class="value">0.00</span>
                     </div>
+                    <div class="mini-stat">
+                        <span class="label">STEP</span>
+                        <span id="stat-step" class="value">0 / 0</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="workspace-content">
+                <div id="empty-state" class="state-placeholder">
+                    <p>Initialize Environment to Begin Review</p>
+                </div>
+
+                <div id="context-view" class="hidden">
+                    <section class="content-section">
+                        <div class="section-badge">INSTRUCTION</div>
+                        <div id="instruction-text" class="text-block italic-quote"></div>
+                    </section>
                     
-                    <div class="info-block">
-                        <span class="label">CONTRACT EXCERPT</span>
-                        <div id="excerpt-text" class="content-text code-block"></div>
-                    </div>
+                    <section class="content-section">
+                        <div class="section-badge">CONTRACT EXCERPT</div>
+                        <div class="code-container">
+                            <pre id="excerpt-text" class="contract-code"></pre>
+                        </div>
+                    </section>
 
-                    <div class="info-block hidden" id="feedback-block">
-                        <span class="label">PREVIOUS FEEDBACK</span>
-                        <div id="feedback-text" class="content-text feedback-highlight"></div>
-                    </div>
+                    <section id="feedback-block" class="content-section hidden">
+                        <div class="section-badge badge-warning">FEEDBACK</div>
+                        <div id="feedback-text" class="text-block highlight"></div>
+                    </section>
                 </div>
             </div>
-        </div>
+        </main>
 
-        <!-- Right Panel: Status & Interaction -->
-        <div class="panel panel-right">
+        <!-- Right Intelligence Panel -->
+        <aside class="intel-panel">
             <div class="panel-header">
-                <h3>ENGINE STATUS</h3>
-            </div>
-            
-            <div class="stats-row">
-                <div class="stat-card">
-                    <span class="stat-label">SCORE</span>
-                    <span class="stat-value" id="stat-score">0.00</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">REWARD (Δ)</span>
-                    <span class="stat-value" id="stat-delta">+0.00</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">STEP</span>
-                    <span class="stat-value" id="stat-step">0/0</span>
-                </div>
+                <h3>INTELLIGENCE DECK</h3>
             </div>
 
-            <div class="panel-section">
-                <span class="section-title">ISSUES IDENTIFIED</span>
-                <div id="flags-container" class="flags-list">
-                    <p class="placeholder-text">No issues flagged yet.</p>
+            <div class="intel-content">
+                <div class="reward-tracker">
+                    <label>LAST REWARD</label>
+                    <div class="reward-display">
+                        <span id="stat-delta">0.00</span>
+                    </div>
+                </div>
+
+                <div class="intel-section">
+                    <label>RISK FLAGS</label>
+                    <div id="flags-container" class="flags-flow">
+                        <p class="empty-hint">No flags detected yet.</p>
+                    </div>
+                </div>
+
+                <div class="intel-section interaction">
+                    <label>ACTION PAYLOAD</label>
+                    <div class="editor-box">
+                        <textarea id="action-input" spellcheck="false" placeholder="Payload awaiting reset..." disabled></textarea>
+                    </div>
                 </div>
             </div>
-
-            <div class="panel-section flex-grow">
-                <span class="section-title">ACTION SUBMISSION (JSON)</span>
-                <textarea id="action-input" class="code-input" spellcheck="false" placeholder="Awaiting environment state..." disabled></textarea>
-            </div>
-        </div>
+        </aside>
     </div>
 
     <script src="script.js"></script>

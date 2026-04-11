@@ -1,13 +1,23 @@
 const elements = {
+    // Nav & Controls
     taskSelect: document.getElementById('task-select'),
     btnReset: document.getElementById('btn-reset'),
     btnRun: document.getElementById('btn-run'),
+    
+    // Displays
+    taskNameDisplay: document.getElementById('task-name-display'),
+    taskBrief: document.getElementById('task-brief'),
     logsContainer: document.getElementById('logs-container'),
-    contextWrapper: document.getElementById('context-wrapper'),
+    
+    // Content Panels
+    emptyState: document.getElementById('empty-state'),
+    contextView: document.getElementById('context-view'),
     instructionText: document.getElementById('instruction-text'),
     excerptText: document.getElementById('excerpt-text'),
     feedbackBlock: document.getElementById('feedback-block'),
     feedbackText: document.getElementById('feedback-text'),
+    
+    // Intel Stats
     statScore: document.getElementById('stat-score'),
     statDelta: document.getElementById('stat-delta'),
     statStep: document.getElementById('stat-step'),
@@ -15,38 +25,60 @@ const elements = {
     actionInput: document.getElementById('action-input')
 };
 
-function logMsg(msg, isSystem = true) {
-    const p = document.createElement('p');
-    p.className = `sys-msg fade-in`;
-    p.textContent = isSystem ? `> [SYSTEM] ${msg}` : msg;
-    elements.logsContainer.appendChild(p);
+/**
+ * Enhanced Logging with auto-scroll
+ */
+function logMsg(msg, type = 'sys') {
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type} fade-in`;
+    const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' });
+    entry.textContent = `[${time}] ${msg}`;
     
-    if (elements.logsContainer.childElementCount > 5) {
+    elements.logsContainer.appendChild(entry);
+    elements.logsContainer.scrollTop = elements.logsContainer.scrollHeight;
+    
+    // Prune logs if too many
+    if (elements.logsContainer.childElementCount > 20) {
         elements.logsContainer.removeChild(elements.logsContainer.firstChild);
     }
 }
 
+/**
+ * Fetch and Populate Tasks
+ */
 async function loadTasks() {
     try {
         const res = await fetch('/tasks');
         const data = await res.json();
         
-        elements.taskSelect.innerHTML = '';
+        elements.taskSelect.innerHTML = '<option value="" disabled selected>Select Task...</option>';
         data.tasks.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
-            opt.textContent = `${t.name} (${t.difficulty})`;
+            opt.textContent = t.name;
+            opt.dataset.desc = t.description || 'Legal analysis task';
             elements.taskSelect.appendChild(opt);
         });
-        logMsg('Available tasks loaded.');
+        logMsg('Network established. Tasks synchronized.', 'ready');
     } catch (err) {
-        logMsg('Failed to load tasks. ' + err.message);
+        logMsg('Connection error: ' + err.message);
     }
 }
 
+/**
+ * Update UI state based on Backend response
+ */
 function updateStateUI(state) {
     const obs = state.observation || {};
-    elements.contextWrapper.classList.remove('hidden');
+    
+    // Swap views
+    elements.emptyState.classList.add('hidden');
+    elements.contextView.classList.remove('hidden');
+    
+    // Identity
+    elements.taskNameDisplay.textContent = obs.task_name || 'Active Task';
+    
+    // Content
     elements.instructionText.textContent = obs.instruction || '';
     elements.excerptText.textContent = obs.contract_excerpt || '';
     
@@ -57,60 +89,77 @@ function updateStateUI(state) {
         elements.feedbackBlock.classList.add('hidden');
     }
     
+    // Stats
     const prog = obs.progress || {};
-    elements.statStep.textContent = `${prog.step || 0}/${prog.max_steps || 0}`;
+    elements.statStep.textContent = `${prog.step || 0} / ${prog.max_steps || 0}`;
     
+    // Action Controls
     elements.btnRun.disabled = state.done;
     
     if (state.done) {
         elements.actionInput.value = '';
-        elements.actionInput.placeholder = 'Episode complete.';
+        elements.actionInput.placeholder = 'OS Session Ended.';
         elements.actionInput.disabled = true;
-        logMsg(`Episode done. Final Score: ${Number(prog.rewards_so_far || 0).toFixed(2)}`);
+        logMsg(`Episode Terminated. Efficiency: ${prog.step}/${prog.max_steps}`, 'sys');
     } else {
         elements.actionInput.disabled = false;
-        elements.actionInput.value = JSON.stringify({
-            analysis: "Enter your analysis here...",
-            flags: [],
-            risk_assessment: "medium"
-        }, null, 2);
+        // Smart Template Pre-fill
+        if (!elements.actionInput.value || elements.actionInput.value.includes("Enter your analysis")) {
+            elements.actionInput.value = JSON.stringify({
+                analysis: "Synthesizing legal risks...",
+                flags: [],
+                risk_assessment: "medium"
+            }, null, 2);
+        }
     }
 }
 
+/**
+ * Execute Environment Reset
+ */
 async function actReset() {
     const taskId = elements.taskSelect.value;
-    if (!taskId) return;
+    if (!taskId) {
+        logMsg('ERR: Select task definition code first.');
+        return;
+    }
     
     elements.btnReset.disabled = true;
-    logMsg(`Initializing environment for task: ${taskId}...`);
+    logMsg(`Mounting task environment: ${taskId}`, 'sys');
     
     try {
         const res = await fetch(`/reset?task_id=${taskId}`, { method: 'POST' });
         const data = await res.json();
         
+        // Zero out UI
         elements.statScore.textContent = '0.00';
-        elements.statDelta.textContent = '+0.00';
-        elements.flagsContainer.innerHTML = '<p class="placeholder-text">No issues flagged yet.</p>';
+        elements.statDelta.textContent = '0.00';
+        elements.statDelta.style.color = 'var(--pos-green)';
+        elements.flagsContainer.innerHTML = '<p class="empty-hint">Scanning document...</p>';
+        
         updateStateUI(data);
-        logMsg('Link established. Awaiting solution.');
+        logMsg('Initialization complete. Agent ready.', 'ready');
     } catch (err) {
-        logMsg('Reset failed: ' + err.message);
+        logMsg('Boot error: ' + err.message);
     } finally {
         elements.btnReset.disabled = false;
     }
 }
 
+/**
+ * Execute Step/Action
+ */
 async function actRun() {
     let actionData;
     try {
         actionData = JSON.parse(elements.actionInput.value);
     } catch (e) {
-        alert('Invalid JSON in Action Submission');
+        logMsg('PARSE ERR: Invalid JSON payload in buffer.');
         return;
     }
     
     elements.btnRun.disabled = true;
-    logMsg('Executing action...');
+    logMsg('Processing inference step...', 'sys');
     
     try {
         const res = await fetch('/step', {
@@ -121,28 +170,26 @@ async function actRun() {
         const data = await res.json();
         
         // Update flags
-        const flagsHtml = (actionData.flags || []).map(f => 
-            `<div class="flag-item severity-${f.severity || 'low'}">
-                <span>${f.title}</span>
-                <span>[${f.clause_reference}]</span>
-            </div>`
-        ).join('');
-        
-        if (flagsHtml) {
+        if (actionData.flags && actionData.flags.length > 0) {
+            const flagsHtml = actionData.flags.map(f => `
+                <div class="flag">
+                    <strong style="color:var(--accent-violet)">[${(f.severity || 'low').toUpperCase()}]</strong> 
+                    ${f.title}
+                </div>
+            `).join('');
             elements.flagsContainer.innerHTML = flagsHtml;
         }
         
-        // Update stats
+        // Visual stat update
         const reward = data.reward || 0;
         const currentScore = parseFloat(elements.statScore.textContent);
-        const newScore = currentScore + reward;
-        elements.statScore.textContent = newScore.toFixed(2);
+        elements.statScore.textContent = (currentScore + reward).toFixed(2);
         
-        const deltaStr = reward >= 0 ? `+${reward.toFixed(2)}` : reward.toFixed(2);
-        elements.statDelta.textContent = deltaStr;
-        elements.statDelta.style.color = reward >= 0 ? 'var(--positive)' : 'var(--alert)';
+        elements.statDelta.textContent = (reward >= 0 ? '+' : '') + reward.toFixed(2);
+        elements.statDelta.style.color = reward >= 0 ? 'var(--pos-green)' : 'var(--neg-red)';
         
         updateStateUI(data);
+        logMsg(`Step ${data.observation.step} processed. Reward calculated.`, 'ready');
     } catch (err) {
         logMsg('Step failed: ' + err.message);
     } finally {
@@ -154,4 +201,10 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTasks();
     elements.btnReset.addEventListener('click', actReset);
     elements.btnRun.addEventListener('click', actRun);
+    
+    // Update task description on select
+    elements.taskSelect.addEventListener('change', () => {
+        const selected = elements.taskSelect.options[elements.taskSelect.selectedIndex];
+        elements.taskBrief.textContent = selected.dataset.desc;
+    });
 });
