@@ -54,6 +54,7 @@ class LexObservation(Observation):
     step: int = Field(..., description="Current step number")
     max_steps: int = Field(..., description="Maximum steps allowed")
     previous_analysis: Optional[str] = Field(None, description="Previous step feedback")
+    tone_analysis: Dict[str, Any] = Field(default_factory=dict, description="LLM tone appraisal")
     progress: Dict[str, Any] = Field(default_factory=dict, description="Progress tracking")
 
 

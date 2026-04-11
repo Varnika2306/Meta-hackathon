@@ -22,7 +22,9 @@ const elements = {
     statDelta: document.getElementById('stat-delta'),
     statStep: document.getElementById('stat-step'),
     flagsContainer: document.getElementById('flags-container'),
-    actionInput: document.getElementById('action-input')
+    actionInput: document.getElementById('action-input'),
+    toneBar: document.getElementById('tone-bar'),
+    toneFeedback: document.getElementById('tone-feedback')
 };
 
 /**
@@ -119,6 +121,12 @@ function updateStateUI(state) {
     elements.statDelta.textContent = (reward >= 0 ? '+' : '') + reward.toFixed(2);
     elements.statDelta.style.color = reward >= 0 ? 'var(--pos-green)' : 'var(--neg-red)';
     
+    // Update Tone Meter
+    const tone = obs.tone_analysis || {};
+    const toneScore = tone.score || 0;
+    elements.toneBar.style.width = `${toneScore * 100}%`;
+    elements.toneFeedback.textContent = tone.feedback || 'Legalese quality being appraised...';
+
     // Action Controls
     const isDone = state.done || obs.done;
     elements.btnRun.disabled = isDone;

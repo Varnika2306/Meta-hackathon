@@ -173,7 +173,9 @@ class LexGrader:
         agent_analysis: str,
         agent_risk_level: str,
         step_num: int,
-        is_final_step: bool = False
+        is_final_step: bool = False,
+        tone_score: float = 0.0,
+        tone_feedback: str = ""
     ) -> Dict[str, float]:
         """
         Calculate detailed reward for a single step.
@@ -183,6 +185,7 @@ class LexGrader:
             - efficiency_bonus: early step bonus
             - analysis_quality: text quality bonus
             - risk_match_bonus: if risk level assessment is reasonable
+            - tone_professionalism: LLM-based writing quality bonus
             - total_reward: final step reward
         """
         step_score, matched_ids, confidences = self.grade_step(agent_analysis, agent_risk_level)
@@ -201,6 +204,9 @@ class LexGrader:
         else:
             quality_bonus = 0.0
         
+        # Tone/Professionalism bonus (from LLM grader) - weighted at 15% of possible bonus
+        tone_bonus = tone_score * 0.15
+        
         # Risk assessment alignment
         risk_match = 0.0
         if agent_risk_level.lower() in ["high", "critical"]:
@@ -208,14 +214,15 @@ class LexGrader:
         elif agent_risk_level.lower() == "medium":
             risk_match = 0.05
         
-        total_reward = max(0.01, min(0.99, step_score + early_bonus + quality_bonus + risk_match))
+        total_reward = max(0.01, min(0.99, step_score + early_bonus + quality_bonus + risk_match + tone_bonus))
         
         return {
             "per_step_score": step_score,
             "efficiency_bonus": early_bonus,
             "analysis_quality": quality_bonus,
+            "tone_professionalism": tone_bonus,
             "risk_match_bonus": risk_match,
-            "false_positive_penalty": 0.0,
+            "tone_feedback": tone_feedback,
             "total_step_reward": total_reward
         }
 

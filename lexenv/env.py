@@ -12,6 +12,7 @@ from openenv.core.env_server.types import EnvironmentMetadata
 from lexenv.models import LexAction, LexObservation, LexState, RiskLevel
 from lexenv.data.contracts import get_task_data
 from lexenv.graders import create_grader_for_task
+from lexenv.llm_grader import ToneGrader
 
 # ============================================================================
 # Global Persistence Registry (Handles multi-user session survival)
@@ -32,6 +33,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         super().__init__()
         self._state: Optional[LexState] = None
         self._grader = None
+        self._tone_grader = ToneGrader()
         self._episode_history: List[Dict[str, Any]] = []
 
     def _recover_session(self, session_id: Optional[str]) -> bool:
@@ -126,6 +128,8 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             agent_risk_level=action.risk_assessment.value,
             step_num=step_num,
             is_final_step=is_final,
+            tone_score=kwargs.get("tone_score", 0.0),
+            tone_feedback=kwargs.get("tone_feedback", "")
         )
         step_reward: float = max(0.01, min(0.99, reward_breakdown["total_step_reward"]))
         self._state.step_rewards.append(step_reward)
@@ -143,6 +147,10 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             task_data,
             step=step_num,
             previous_feedback=f"Step {step_num} reward: {step_reward:.3f}",
+            tone_results={
+                "score": kwargs.get("tone_score", 0.0),
+                "feedback": kwargs.get("tone_feedback", "")
+            }
         )
         obs.reward = step_reward
         obs.done = done
@@ -153,6 +161,15 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         return obs
 
     async def step_async(self, action: LexAction, **kwargs) -> LexObservation:
+        """Asynchronous step that incorporates LLM tone grading."""
+        # 1. Evaluate Tone (LLM-as-a-judge)
+        task_name = self._state.task_name if self._state else "Legal contract"
+        tone_results = await self._tone_grader.evaluate_tone(action.analysis, task_name)
+        
+        # 2. Pass results into the synchronous step logic via kwargs
+        kwargs["tone_score"] = tone_results.get("tone_score", 0.0)
+        kwargs["tone_feedback"] = tone_results.get("feedback", "")
+        
         return self.step(action, **kwargs)
 
     @property
@@ -171,6 +188,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         task_data: Dict[str, Any],
         step: int = 0,
         previous_feedback: Optional[str] = None,
+        tone_results: Optional[Dict[str, Any]] = None,
     ) -> LexObservation:
         contract: str = task_data["contract"]
         max_steps: int = task_data["max_steps"]
@@ -193,6 +211,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             step=step,
             max_steps=max_steps,
             previous_analysis=previous_feedback,
+            tone_analysis=tone_results if tone_results else {},
             progress={
                 "step": step,
                 "max_steps": max_steps,
