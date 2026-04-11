@@ -18,10 +18,10 @@ import httpx
 # CONFIGURATION - STRICTLY USE VALIDATOR'S CREDENTIALS
 # ============================================================================
 
-# THESE MUST BE SET BY VALIDATOR - NO DEFAULTS!
-API_BASE_URL = os.getenv("API_BASE_URL")
-API_KEY = os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4")  # Validator provides this
+# THESE MUST BE SET BY VALIDATOR - checking multiple possible names for resilience
+API_BASE_URL = os.getenv("API_BASE_URL") or os.getenv("OPENAI_API_BASE") or os.getenv("OPENAI_BASE_URL")
+API_KEY = os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME") or os.getenv("OPENAI_MODEL_NAME") or "gpt-4"
 
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 TASK_NAME = os.getenv("LEXENV_TASK", "clause_id")
@@ -180,21 +180,34 @@ async def main() -> None:
         log_end(success=False, steps=0, score=0.01, rewards=[])
         sys.exit(1)
     
-    print(f"[DEBUG] Using validator's API:", flush=True)
-    print(f"[DEBUG]   API_BASE_URL = {API_BASE_URL}", flush=True)
-    print(f"[DEBUG]   MODEL_NAME = {MODEL_NAME}", flush=True)
+    # ---- ENVIRONMENT AUDIT (DEBUGGING) ----
+    print(f"[DEBUG] Environment variable keys available at startup:", flush=True)
+    for key in sorted(os.environ.keys()):
+        if any(x in key.upper() for x in ["API", "URL", "BASE", "MODEL", "KEY"]):
+            print(f"[DEBUG]   Detected Key: {key}", flush=True)
+    
+    print(f"[DEBUG] Identified validator credentials:", flush=True)
+    print(f"[DEBUG]   Found API_BASE_URL: {bool(API_BASE_URL)}", flush=True)
+    print(f"[DEBUG]   Found API_KEY: {bool(API_KEY)}", flush=True)
+    print(f"[DEBUG]   MODEL_NAME: {MODEL_NAME}", flush=True)
     
     # ---- INITIALIZE ----
     try:
         # MUST use validator's credentials
-        # FINAL HARDENING: Ensure the base URL ends in /v1. 
+        # FINAL HARDENING: Sanitize URL and ensure /v1 suffix.
         # Many proxies (like LiteLLM) require this to route correctly.
-        sanitized_base_url = API_BASE_URL.rstrip("/")
-        if not sanitized_base_url.endswith("/v1"):
-            sanitized_base_url += "/v1"
-            print(f"[DEBUG] Sanitized API_BASE_URL: {sanitized_base_url}", flush=True)
+        base_url = (API_BASE_URL or "").strip().rstrip("/")
+        
+        # Strip accidental /chat/completions if the user/platform provided a full endpoint
+        if base_url.endswith("/chat/completions"):
+            base_url = base_url.replace("/chat/completions", "").rstrip("/")
+            
+        if not base_url.endswith("/v1"):
+            base_url += "/v1"
+            
+        print(f"[DEBUG] Sanitized Base URL being used: {base_url}", flush=True)
 
-        openai_client = AsyncOpenAI(base_url=sanitized_base_url, api_key=API_KEY)
+        openai_client = AsyncOpenAI(base_url=base_url, api_key=API_KEY)
         env_client = EnvClient(ENV_URL)
         
         history: List[str] = []
