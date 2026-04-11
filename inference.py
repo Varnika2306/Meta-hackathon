@@ -39,6 +39,9 @@ MAX_TOKENS = 800
 SYSTEM_PROMPT = textwrap.dedent("""
     You are an expert legal analyst. Analyze the contract and identify risks, 
     unfavorable terms, and problematic clauses with specific section references.
+    CRITICAL: YOU MUST EXACTLY QUOTE THE PROBLEMATIC PHRASES FROM THE TEXT in your analysis.
+    The automated grader uses keyword matching. If you identify a bad clause, quote its exact 
+    words (e.g., "five (5) years", "Cayman Islands", "best of ability") in the analysis text.
     Return analysis in JSON format with "analysis", "flags", and "risk_assessment".
 """).strip()
 

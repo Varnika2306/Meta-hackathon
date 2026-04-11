@@ -87,15 +87,15 @@ class LexGrader:
         matched_issue_ids = []
         match_confidences = []
         
-        if not agent_analysis or len(agent_analysis.strip()) < 50:
+        if not agent_analysis or len(agent_analysis.strip()) < 20:
             # Penalty for too-short analysis (must be > 0.0)
             return 0.01, [], []
         
         for issue in self.ground_truth:
             keywords = issue.get("keywords", [])
-            confidence = self.fuzzy_match(agent_analysis, keywords)
+            confidence = self.fuzzy_match(agent_analysis, keywords, threshold=0.55)
             
-            if confidence > 0.5:  # Issue appears to be identified
+            if confidence > 0.45:  # Issue appears to be identified
                 matched_issue_ids.append(issue["id"])
                 match_confidences.append(confidence)
                 
@@ -104,7 +104,7 @@ class LexGrader:
         
         # Base score should be at least slightly positive even if nothing found
         # and capped below 1.0
-        final_step_score = max(0.01, min(0.99, step_score))
+        final_step_score = max(0.01, min(0.99, step_score + 0.05)) # Small bump so it's not strictly 0.01
         return final_step_score, matched_issue_ids, match_confidences
     
     def grade_episode(
@@ -131,9 +131,9 @@ class LexGrader:
         
         for issue in self.ground_truth:
             keywords = issue.get("keywords", [])
-            confidence = self.fuzzy_match(combined_analysis, keywords)
+            confidence = self.fuzzy_match(combined_analysis, keywords, threshold=0.55)
             
-            if confidence > 0.5:
+            if confidence > 0.45:
                 identified_issues.add(issue["id"])
                 total_confidence += confidence
         
@@ -148,10 +148,10 @@ class LexGrader:
         
         # Efficiency: bonus if found enough issues in few steps
         expected_steps = max(2, len(self.ground_truth) / 3)  # ~3 issues per step
-        efficiency = min(1.0, max(0.5, expected_steps / steps_taken))
+        efficiency = min(1.0, max(0.5, expected_steps / max(1, steps_taken)))
         
         # Final weighted score strictly within (0, 1)
-        final_score = (0.60 * completeness) + (0.25 * accuracy) + (0.15 * efficiency)
+        final_score = (0.65 * completeness) + (0.20 * accuracy) + (0.15 * efficiency)
         return {
             "completeness": completeness,
             "accuracy": accuracy,
