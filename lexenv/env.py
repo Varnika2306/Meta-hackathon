@@ -105,14 +105,14 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
         max_steps: int = task_data["max_steps"]
         is_final = step_num >= max_steps
 
-        # Calculate reward
+        # Calculate and strictly clamp reward (0.01 to 0.99)
         reward_breakdown = self._grader.calculate_step_reward(
             agent_analysis=action.analysis,
             agent_risk_level=action.risk_assessment.value,
             step_num=step_num,
             is_final_step=is_final,
         )
-        step_reward: float = reward_breakdown["total_step_reward"]
+        step_reward: float = max(0.01, min(0.99, reward_breakdown["total_step_reward"]))
         self._state.step_rewards.append(step_reward)
 
         # Episode completion
@@ -125,7 +125,8 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
                 all_risk_levels=all_risks,
                 steps_taken=step_num,
             )
-            self._state.episode_score = episode_grades["final_score"]
+            # Strictly clamp episode final score (0.01 to 0.99)
+            self._state.episode_score = max(0.01, min(0.99, episode_grades["final_score"]))
             self._state.episode_done = True
 
         self._episode_history.append(
