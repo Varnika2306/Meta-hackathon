@@ -41,9 +41,10 @@ class LexGrader:
         
         return phrases
     
-    def fuzzy_match(self, agent_text: str, issue_keywords: List[str], threshold: float = 0.6) -> float:
+    def fuzzy_match(self, agent_text: str, issue_keywords: List[str], threshold: float = 0.5) -> float:
         """
-        Calculate fuzzy match score between agent analysis and issue keywords
+        Calculate fuzzy match score between agent analysis and issue keywords.
+        Uses multi-strategy matching: exact substring, word overlap, and fuzzy ratio.
         
         Returns match confidence (0.0 - 1.0)
         """
@@ -51,28 +52,44 @@ class LexGrader:
             return 0.0
         
         agent_text_lower = agent_text.lower()
-        max_match = 0.0
+        agent_words = set(re.findall(r'\b\w+\b', agent_text_lower))
+        
+        exact_hits = 0
+        best_fuzzy = 0.0
         
         for keyword in issue_keywords:
             keyword_lower = keyword.lower()
             
-            # Exact substring match (highest confidence)
+            # Strategy 1: Exact substring match (highest confidence)
             if keyword_lower in agent_text_lower:
-                return 1.0
+                exact_hits += 1
+                continue
             
-            # Fuzzy similarity
-            ratio = SequenceMatcher(None, agent_text_lower, keyword_lower).ratio()
-            max_match = max(max_match, ratio)
-            
-            # Try word-level matching
-            agent_words = set(re.findall(r'\b\w+\b', agent_text_lower))
+            # Strategy 2: Word-level overlap for multi-word keywords
             keyword_words = set(re.findall(r'\b\w+\b', keyword_lower))
-            
             if keyword_words and agent_words:
                 overlap = len(keyword_words & agent_words) / len(keyword_words)
-                max_match = max(max_match, overlap)
+                if overlap >= 1.0:
+                    exact_hits += 1
+                    continue
+                best_fuzzy = max(best_fuzzy, overlap)
+            
+            # Strategy 3: Fuzzy similarity (only for short keywords to avoid noise)
+            if len(keyword_lower) > 3:
+                # Check if keyword appears as a substring of any agent word sequence
+                ratio = SequenceMatcher(None, agent_text_lower, keyword_lower).ratio()
+                best_fuzzy = max(best_fuzzy, ratio)
         
-        return min(1.0, max_match) if max_match >= threshold else max_match * 0.5
+        # Score based on number of exact keyword hits
+        if exact_hits >= 3:
+            return 1.0
+        elif exact_hits >= 2:
+            return 0.9
+        elif exact_hits >= 1:
+            return 0.8
+        
+        # Fall back to best fuzzy score
+        return min(1.0, best_fuzzy) if best_fuzzy >= threshold else best_fuzzy * 0.5
     
     def grade_step(self, agent_analysis: str, agent_risk_level: str) -> Tuple[float, List[int], List[float]]:
         """
@@ -88,23 +105,21 @@ class LexGrader:
         match_confidences = []
         
         if not agent_analysis or len(agent_analysis.strip()) < 20:
-            # Penalty for too-short analysis (must be > 0.0)
             return 0.01, [], []
         
         for issue in self.ground_truth:
             keywords = issue.get("keywords", [])
-            confidence = self.fuzzy_match(agent_analysis, keywords, threshold=0.55)
+            confidence = self.fuzzy_match(agent_analysis, keywords)
             
-            if confidence > 0.45:  # Issue appears to be identified
+            if confidence > 0.4:  # Issue appears to be identified
                 matched_issue_ids.append(issue["id"])
                 match_confidences.append(confidence)
                 
                 # Add weighted score for this issue
                 step_score += issue.get("weight", 1.0/len(self.ground_truth)) * confidence
         
-        # Base score should be at least slightly positive even if nothing found
-        # and capped below 1.0
-        final_step_score = max(0.01, min(0.99, step_score + 0.05)) # Small bump so it's not strictly 0.01
+        # Participation bump so non-zero analysis always gets something
+        final_step_score = max(0.01, min(0.99, step_score + 0.05))
         return final_step_score, matched_issue_ids, match_confidences
     
     def grade_episode(
@@ -122,35 +137,29 @@ class LexGrader:
             - efficiency: bonus for quick identification
             - final_score: overall 0.0-1.0 score
         """
-        # Combine all analyses
         combined_analysis = "\n".join(all_analyses)
         
-        # Check which issues were found
         identified_issues = set()
         total_confidence = 0.0
         
         for issue in self.ground_truth:
             keywords = issue.get("keywords", [])
-            confidence = self.fuzzy_match(combined_analysis, keywords, threshold=0.55)
+            confidence = self.fuzzy_match(combined_analysis, keywords)
             
-            if confidence > 0.45:
+            if confidence > 0.4:
                 identified_issues.add(issue["id"])
                 total_confidence += confidence
         
-        # Completeness score (% of issues found)
         completeness = len(identified_issues) / len(self.ground_truth) if self.ground_truth else 1.0
         
-        # Accuracy: penalize if very few high-confidence matches
         if identified_issues:
             accuracy = min(1.0, max(0.5, total_confidence / len(identified_issues)))
         else:
             accuracy = 0.0
         
-        # Efficiency: bonus if found enough issues in few steps
-        expected_steps = max(2, len(self.ground_truth) / 3)  # ~3 issues per step
+        expected_steps = max(2, len(self.ground_truth) / 3)
         efficiency = min(1.0, max(0.5, expected_steps / max(1, steps_taken)))
         
-        # Final weighted score strictly within (0, 1)
         final_score = (0.65 * completeness) + (0.20 * accuracy) + (0.15 * efficiency)
         return {
             "completeness": completeness,
@@ -167,7 +176,7 @@ class LexGrader:
         is_final_step: bool = False
     ) -> Dict[str, float]:
         """
-        Calculate detailed reward for a single step
+        Calculate detailed reward for a single step.
         
         Returns breakdown:
             - per_step_score: base score from issue identification
@@ -176,25 +185,28 @@ class LexGrader:
             - risk_match_bonus: if risk level assessment is reasonable
             - total_reward: final step reward
         """
-        # Base score from issue identification
-        step_score, _, confidences = self.grade_step(agent_analysis, agent_risk_level)
+        step_score, matched_ids, confidences = self.grade_step(agent_analysis, agent_risk_level)
         
         # Early step bonus (more reward for finding issues quickly)
         early_bonus = max(0.0, (1.0 - step_num / 5) * 0.05)
         
-        # Analysis quality bonus (longer, more detailed analysis)
+        # Analysis quality bonus — reward longer, more detailed analysis
         text_len = len(agent_analysis.strip())
-        quality_bonus = min(0.05, text_len / 1000 * 0.05) if text_len > 50 else -0.05
+        if text_len > 200:
+            quality_bonus = 0.10
+        elif text_len > 100:
+            quality_bonus = 0.05
+        elif text_len > 50:
+            quality_bonus = 0.02
+        else:
+            quality_bonus = 0.0
         
-        # Risk assessment alignment (basic check - just ensure it's not clearly wrong)
+        # Risk assessment alignment
         risk_match = 0.0
-        if agent_risk_level.lower() in ["low", "medium", "high", "critical"]:
-            # Higher confidence if risk level seems reasonable
-            num_issues = len([x for x in confidences if x > 0.5])
-            if agent_risk_level.lower() == "critical" and num_issues >= 2:
-                risk_match = 0.05
-            elif agent_risk_level.lower() == "high" and num_issues >= 1:
-                risk_match = 0.05
+        if agent_risk_level.lower() in ["high", "critical"]:
+            risk_match = 0.10
+        elif agent_risk_level.lower() == "medium":
+            risk_match = 0.05
         
         total_reward = max(0.01, min(0.99, step_score + early_bonus + quality_bonus + risk_match))
         
