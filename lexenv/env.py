@@ -19,6 +19,8 @@ import logging
 import os
 import shutil
 
+logger = logging.getLogger("lexenv.env")
+
 # ============================================================================
 # Inter-Process Persistence Registry (Handles multi-worker process survival)
 # ============================================================================
@@ -66,7 +68,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
                     self._grader = create_grader_for_task(self._state.task_id)
                     return True
         except Exception as e:
-            print(f"DEBUG: Session recovery failed: {e}")
+            logger.warning(f"Session recovery failed: {e}")
         return False
 
     def _persist_session(self, session_id: Optional[str]):
@@ -93,7 +95,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
                     json.dump(registry, f)
                 shutil.move(temp_file, STATE_FILE)
         except Exception as e:
-            print(f"DEBUG: Session persistence failed: {e}")
+            logger.warning(f"Session persistence failed: {e}")
 
     # ------------------------------------------------------------------ #
     # reset (sync — required by Environment ABC)                           #

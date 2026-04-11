@@ -55,6 +55,8 @@ observation_space:
     step: integer
     max_steps: integer
     previous_analysis: string
+    tone_analysis: object
+    identified_flags: array
     progress: object
 
 action_space:

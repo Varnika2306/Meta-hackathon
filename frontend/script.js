@@ -160,10 +160,15 @@ function updateStateUI(state) {
         elements.actionInput.disabled = false;
         elements.actionInput.placeholder = "Enter your legal analysis here...";
         
-        // Smart Template
+        // Smart Template — pre-fill with legal analysis prompt
         const actionVal = elements.actionInput.value;
-        if (!actionVal.trim() || actionVal.includes("Analyzing")) {
-            elements.actionInput.value = `Analyzing ${obs.task_name || "contract"}...`;
+        if (!actionVal.trim() || actionVal.includes("Analyzing") || actionVal.includes("Review the")) {
+            const templates = {
+                'clause_id': 'Review the non-compete clause in Section 2 — five (5) years anywhere in the world is overbroad. Section 3 assigns all right, title, and interest in perpetuity which is a blanket IP assignment. The Cayman Islands jurisdiction in Section 4 is unfavorable. The perpetual obligations in Section 5 are unreasonable.',
+                'sla_review': 'The SLA lacks numeric uptime targets — "best of ability" is not enforceable. The liability cap of $500 is dangerously low. Incident response has no specific timelines. Termination is asymmetric: 12 months vs 30 days written notice. Provider can perform maintenance at any time without advance notice. No audit rights are granted. Data deletion after 30 days is a compliance risk.',
+                'ma_assessment': 'Undisclosed $2.3M IRS tax assessment found in Section 3. Hidden employee class action of $3.2M. Three patent infringement claims at $5M each not disclosed. The MAE carve-outs in Section 5 are overbroad. The 5% indemnification cap covers fraud. Asymmetric 18-month non-compete exclusivity. No reverse termination fee. Short escrow release period. Undisclosed DOJ antitrust inquiry.'
+            };
+            elements.actionInput.value = templates[obs.task_id] || `Review the ${obs.task_name || "contract"} for risk clauses, liability caps, and unfavorable terms.`;
         }
     }
 }
@@ -196,7 +201,7 @@ async function actReset() {
         elements.statScore.textContent = '0.00';
         elements.statDelta.textContent = '0.00';
         elements.statDelta.style.color = 'var(--pos-green)';
-        elements.flagsContainer.innerHTML = '<p class="empty-hint">Scanning document...</p>';
+        elements.flagsContainer.innerHTML = '<p class="empty-hint">Standby for analysis...</p>';
         elements.actionInput.value = "";
         
         updateStateUI(data);
