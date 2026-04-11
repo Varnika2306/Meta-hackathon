@@ -48,14 +48,14 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
 
         Parameters
         ----------
-        task_id : "clause_id" | "sla_review" | "ma_assessment"  (default: clause_id)
+        task_id : "clause_id" | "sla_review" | "ma_assessment" | "contract_negotiation"  (default: clause_id)
         seed    : reserved for future stochastic tasks (currently ignored)
         """
         task_data = get_task_data(task_id)
         if task_data is None:
             raise ValueError(
                 f"Unknown task_id '{task_id}'. "
-                "Available: clause_id, sla_review, ma_assessment"
+                "Available: clause_id, sla_review, ma_assessment, contract_negotiation"
             )
 
         self._state = LexState(
@@ -129,16 +129,14 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             self._state.episode_score = max(0.01, min(0.99, episode_grades["final_score"]))
             self._state.episode_done = True
 
-        self._episode_history.append(
-            {"step": step_num, "reward": step_reward, "done": done}
-        )
+        self._episode_history.append({"step": step_num, "reward": step_reward, "done": done})
 
         obs = self._build_observation(
             task_data,
             step=step_num,
             previous_feedback=f"Step {step_num} reward: {step_reward:.3f}",
         )
-        
+
         # Report the partial step reward (strictly clamped 0.01-0.99).
         # The inference.py script will calculate the final score by averaging these.
         obs.reward = step_reward
@@ -197,7 +195,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
             start = quarter * min(step, 3)
             excerpt = (
                 "[Continuing review — previous feedback received.]\n\n"
-                + contract[start: start + quarter * 2]
+                + contract[start : start + quarter * 2]
             )
 
         rewards_so_far = sum(self._state.step_rewards) if self._state else 0.0
@@ -219,7 +217,7 @@ class LexEnv(Environment[LexAction, LexObservation, LexState]):
                 "expected_issues": task_data["expected_issues"],
                 "rewards_so_far": rewards_so_far,
                 "is_gradable": True,
-                "grader": True
+                "grader": True,
             },
         )
 

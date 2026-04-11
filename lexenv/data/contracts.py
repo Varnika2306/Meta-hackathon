@@ -1,7 +1,7 @@
 """
 Synthetic Legal Contracts
 - Task 1 (Easy): NDA with 5 key issues
-- Task 2 (Medium): SLA with 8 issues  
+- Task 2 (Medium): SLA with 8 issues
 - Task 3 (Hard): M&A Agreement with 10 complex issues
 """
 
@@ -70,19 +70,29 @@ NDA_GROUND_TRUTH = [
         "id": 1,
         "title": "Overbroad Non-Compete Scope",
         "severity": "critical",
-        "keywords": ["five (5) years", "anywhere in the world", "non-compete", "refrain from engaging"],
+        "keywords": [
+            "five (5) years",
+            "anywhere in the world",
+            "non-compete",
+            "refrain from engaging",
+        ],
         "description": "5-year worldwide non-compete is extremely overbroad. Market standard is 1-2 years, limited geography.",
         "clause_reference": "Section 2",
-        "weight": 0.25
+        "weight": 0.25,
     },
     {
         "id": 2,
         "title": "Blanket Perpetual IP Assignment",
         "severity": "critical",
-        "keywords": ["all right, title, and interest", "in perpetuity", "intellectual property", "assignment"],
+        "keywords": [
+            "all right, title, and interest",
+            "in perpetuity",
+            "intellectual property",
+            "assignment",
+        ],
         "description": "Assignment of ALL IP in perpetuity is dangerous. Should be limited to derivative works only.",
         "clause_reference": "Section 3",
-        "weight": 0.25
+        "weight": 0.25,
     },
     {
         "id": 3,
@@ -91,7 +101,7 @@ NDA_GROUND_TRUTH = [
         "keywords": ["continue indefinitely", "in perpetuity", "continue in perpetuity"],
         "description": "Indefinite term with perpetual obligations. Should have reasonable sunset clause (2-3 years).",
         "clause_reference": "Section 5",
-        "weight": 0.15
+        "weight": 0.15,
     },
     {
         "id": 4,
@@ -100,7 +110,7 @@ NDA_GROUND_TRUTH = [
         "keywords": ["cayman islands", "governing law", "exclusive jurisdiction"],
         "description": "Cayman Islands jurisdiction is unusual and unfavorable. Negotiate for neutral jurisdiction or home state.",
         "clause_reference": "Section 4",
-        "weight": 0.20
+        "weight": 0.20,
     },
     {
         "id": 5,
@@ -109,8 +119,8 @@ NDA_GROUND_TRUTH = [
         "keywords": ["irreparable harm", "equitable relief", "injunctive relief"],
         "description": "Acknowledges irreparable harm too readily. Should add mutual consent requirement for injunctions.",
         "clause_reference": "Section 6",
-        "weight": 0.15
-    }
+        "weight": 0.15,
+    },
 ]
 
 
@@ -172,7 +182,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["uptime", "best of ability", "no specific", "objectives"],
         "description": "Vague uptime commitment ('best of ability'). Need 99.5% uptime + clear measurement.",
         "clause_reference": "Section 2",
-        "weight": 0.15
+        "weight": 0.15,
     },
     {
         "id": 2,
@@ -181,7 +191,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["$500", "liability", "caps", "not exceed"],
         "description": "$500 liability cap is inadequate for enterprise services. Should be tied to monthly fees.",
         "clause_reference": "Section 3",
-        "weight": 0.15
+        "weight": 0.15,
     },
     {
         "id": 3,
@@ -190,7 +200,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["reasonable timeframe", "no specific timelines", "incident"],
         "description": "'Reasonable timeframe' is vague. Need 1-hour response, 4-hour mitigation SLAs.",
         "clause_reference": "Section 4",
-        "weight": 0.12
+        "weight": 0.12,
     },
     {
         "id": 4,
@@ -199,7 +209,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["12 months", "30 days", "termination", "asymmetric"],
         "description": "Customer needs 12 months to exit; Provider only 30 days. Should be symmetric or include early exit clause.",
         "clause_reference": "Section 5",
-        "weight": 0.12
+        "weight": 0.12,
     },
     {
         "id": 5,
@@ -208,7 +218,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["maintenance", "any time", "without advance notice"],
         "description": "Provider can perform maintenance without notice. Need 48-hour advance notice.",
         "clause_reference": "Section 6",
-        "weight": 0.10
+        "weight": 0.10,
     },
     {
         "id": 6,
@@ -217,7 +227,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["audit", "discretion", "no commit", "compliance"],
         "description": "No audit frequency or compliance certs guaranteed. Need SOC 2 Type II annual audit minimum.",
         "clause_reference": "Section 7",
-        "weight": 0.10
+        "weight": 0.10,
     },
     {
         "id": 7,
@@ -226,7 +236,7 @@ SLA_GROUND_TRUTH = [
         "keywords": ["breach", "when discovered", "no specific", "notification"],
         "description": "'When discovered' is too vague. Requires 48-72 hour legal notification.",
         "clause_reference": "Section 8",
-        "weight": 0.14
+        "weight": 0.14,
     },
     {
         "id": 8,
@@ -235,8 +245,8 @@ SLA_GROUND_TRUTH = [
         "keywords": ["data", "deleted", "30 days", "termination"],
         "description": "30-day data retention post-termination may not comply with GDPR/regulations. Need clear policy.",
         "clause_reference": "Section 5",
-        "weight": 0.12
-    }
+        "weight": 0.12,
+    },
 ]
 
 
@@ -317,16 +327,22 @@ MA_GROUND_TRUTH = [
         "keywords": ["irs", "$2.3 million", "assessment", "transfer pricing", "not disclosed"],
         "description": "Seller omitted $2.3M IRS assessment from tax reps. Material adverse change.",
         "clause_reference": "Section 6",
-        "weight": 0.12
+        "weight": 0.12,
     },
     {
         "id": 2,
         "title": "Hidden Employee Litigation",
         "severity": "critical",
-        "keywords": ["class action", "wage-and-hour", "47 former employees", "$3.2 million", "not disclosed"],
+        "keywords": [
+            "class action",
+            "wage-and-hour",
+            "47 former employees",
+            "$3.2 million",
+            "not disclosed",
+        ],
         "description": "Seller concealed pending class action by 47 employees for $3.2M wage claims.",
         "clause_reference": "Section 7",
-        "weight": 0.11
+        "weight": 0.11,
     },
     {
         "id": 3,
@@ -335,16 +351,21 @@ MA_GROUND_TRUTH = [
         "keywords": ["patent", "infringement", "three", "$5 million", "competing entities"],
         "description": "Three pending patent claims ($5M each) not disclosed. Major IP liability.",
         "clause_reference": "Section 8",
-        "weight": 0.10
+        "weight": 0.10,
     },
     {
         "id": 4,
         "title": "Overbroad MAE Carve-Outs",
         "severity": "high",
-        "keywords": ["material adverse effect", "carve-out", "general economic", "industry generally"],
+        "keywords": [
+            "material adverse effect",
+            "carve-out",
+            "general economic",
+            "industry generally",
+        ],
         "description": "MAE carve-outs for 'general economic conditions' and 'changes in law' are too broad.",
         "clause_reference": "Section 2",
-        "weight": 0.10
+        "weight": 0.10,
     },
     {
         "id": 5,
@@ -353,7 +374,7 @@ MA_GROUND_TRUTH = [
         "keywords": ["indemnification", "cap", "5%", "$2,500,000", "fraud"],
         "description": "5% cap applies even to fraud. Cap should exclude fraud and fundamental reps.",
         "clause_reference": "Section 3",
-        "weight": 0.10
+        "weight": 0.10,
     },
     {
         "id": 6,
@@ -362,7 +383,7 @@ MA_GROUND_TRUTH = [
         "keywords": ["18 months", "non-compete", "exclusivity", "brand", "customer relationships"],
         "description": "18-month non-compete + exclusive brand/customer use is very restrictive; imbalanced.",
         "clause_reference": "Section 5",
-        "weight": 0.09
+        "weight": 0.09,
     },
     {
         "id": 7,
@@ -371,7 +392,7 @@ MA_GROUND_TRUTH = [
         "keywords": ["reverse termination", "fee", "buyer terminates", "pre-closing", "no"],
         "description": "Buyer can terminate for discovered issues without paying Seller's costs. Imbalanced.",
         "clause_reference": "Section 10",
-        "weight": 0.09
+        "weight": 0.09,
     },
     {
         "id": 8,
@@ -380,7 +401,7 @@ MA_GROUND_TRUTH = [
         "keywords": ["escrow", "12 months", "release", "without requirement"],
         "description": "Escrow released after 12 months without audit completion. Standard is 18-24 months.",
         "clause_reference": "Section 4",
-        "weight": 0.09
+        "weight": 0.09,
     },
     {
         "id": 9,
@@ -389,7 +410,7 @@ MA_GROUND_TRUTH = [
         "keywords": ["doj", "antitrust", "inquiry", "data sharing", "not disclosed"],
         "description": "Ongoing DOJ antitrust inquiry about data sharing practices not mentioned.",
         "clause_reference": "Section 9",
-        "weight": 0.10
+        "weight": 0.10,
     },
     {
         "id": 10,
@@ -398,9 +419,27 @@ MA_GROUND_TRUTH = [
         "keywords": ["tax liabilities", "periods prior", "indemnify", "unlimited"],
         "description": "Seller indemnifies ALL pre-close tax matters without cap or survival limit.",
         "clause_reference": "Section 6",
-        "weight": 0.09
-    }
+        "weight": 0.09,
+    },
 ]
+
+
+# ============================================================================
+# TASK 4: CONTRACT NEGOTIATION SIMULATION (MEDIUM)
+# ============================================================================
+
+CONTRACT_NEGOTIATION = {
+    "id": "contract_negotiation",
+    "name": "Contract Negotiation Simulation",
+    "description": (
+        "Agent negotiates a contract to maximize client benefit while ensuring "
+        "compliance with legal standards. Includes 5 planted negotiation pitfalls: "
+        "vague terms, missing clauses, unfair penalties, etc."
+    ),
+    "difficulty": "medium",
+    "max_steps": 4,
+    "grader": "lexenv.graders:LexGrader",
+}
 
 
 # ============================================================================
@@ -414,12 +453,12 @@ TASK_DATA = {
         "contract": NDA_CONTRACT,
         "ground_truth": NDA_GROUND_TRUTH,
         "instruction": "You are a legal analyst reviewing a Mutual Non-Disclosure Agreement (NDA). "
-                      "Carefully read the contract and identify any risky, overbroad, or unfavorable clauses "
-                      "that a company should negotiate. Look for overly broad non-compete scope, perpetual "
-                      "obligations, unfavorable jurisdiction, and unbalanced terms. Provide a detailed analysis "
-                      "with specific clause references and remediation suggestions.",
+        "Carefully read the contract and identify any risky, overbroad, or unfavorable clauses "
+        "that a company should negotiate. Look for overly broad non-compete scope, perpetual "
+        "obligations, unfavorable jurisdiction, and unbalanced terms. Provide a detailed analysis "
+        "with specific clause references and remediation suggestions.",
         "max_steps": 3,
-        "expected_issues": 5
+        "expected_issues": 5,
     },
     "sla_review": {
         "name": "SLA Contract Review",
@@ -427,12 +466,12 @@ TASK_DATA = {
         "contract": SLA_CONTRACT,
         "ground_truth": SLA_GROUND_TRUTH,
         "instruction": "You are an enterprise procurement specialist reviewing a Service Level Agreement (SLA). "
-                      "This contract has multiple defects that could expose the company to risk. Carefully analyze "
-                      "each section and identify: missing or vague SLAs, inadequate liability caps, undefined incident "
-                      "response timelines, asymmetric termination rights, and compliance gaps. Each issue should be "
-                      "clearly documented with the section reference and recommended changes.",
+        "This contract has multiple defects that could expose the company to risk. Carefully analyze "
+        "each section and identify: missing or vague SLAs, inadequate liability caps, undefined incident "
+        "response timelines, asymmetric termination rights, and compliance gaps. Each issue should be "
+        "clearly documented with the section reference and recommended changes.",
         "max_steps": 4,
-        "expected_issues": 8
+        "expected_issues": 8,
     },
     "ma_assessment": {
         "name": "M&A Due Diligence Risk Assessment",
@@ -440,20 +479,35 @@ TASK_DATA = {
         "contract": MA_AGREEMENT,
         "ground_truth": MA_GROUND_TRUTH,
         "instruction": "You are a senior deal lawyer conducting M&A due diligence on a $50M acquisition. "
-                      "This purchase agreement contains multiple hidden risks and undisclosed liabilities that could "
-                      "derail the deal or expose the buyer to significant losses. Conduct a comprehensive risk assessment "
-                      "covering: representations and warranties gaps, hidden litigation and regulatory matters, intellectual "
-                      "property risks, tax exposure, employee/labor issues, and deal structure vulnerabilities. Rate overall "
-                      "risk level (low/medium/high/critical) and provide specific, actionable recommendations.",
+        "This purchase agreement contains multiple hidden risks and undisclosed liabilities that could "
+        "derail the deal or expose the buyer to significant losses. Conduct a comprehensive risk assessment "
+        "covering: representations and warranties gaps, hidden litigation and regulatory matters, intellectual "
+        "property risks, tax exposure, employee/labor issues, and deal structure vulnerabilities. Rate overall "
+        "risk level (low/medium/high/critical) and provide specific, actionable recommendations.",
         "max_steps": 5,
-        "expected_issues": 10
-    }
+        "expected_issues": 10,
+    },
+    "contract_negotiation": {
+        "name": "Contract Negotiation Simulation",
+        "difficulty": 2,
+        "contract": CONTRACT_NEGOTIATION,
+        "ground_truth": [],
+        "instruction": "Agent negotiates a contract to maximize client benefit while ensuring compliance with legal standards. Includes 5 planted negotiation pitfalls: vague terms, missing clauses, unfair penalties, etc.",
+        "max_steps": 4,
+        "expected_issues": 0,
+    },
 }
 
 
 def get_task_data(task_id: str) -> Dict[str, Any]:
     """Retrieve task configuration by ID"""
-    return TASK_DATA.get(task_id)
+    tasks = {
+        "clause_id": NDA_CONTRACT,
+        "sla_review": SLA_CONTRACT,
+        "ma_assessment": MA_CONTRACT,
+        "contract_negotiation": CONTRACT_NEGOTIATION,
+    }
+    return tasks.get(task_id)
 
 
 def list_tasks() -> List[Dict[str, Any]]:
@@ -465,7 +519,7 @@ def list_tasks() -> List[Dict[str, Any]]:
             "difficulty": data["difficulty"],
             "expected_issues": data["expected_issues"],
             "max_steps": data["max_steps"],
-            "grader": True
+            "grader": True,
         }
         for task_id, data in TASK_DATA.items()
     ]
