@@ -129,8 +129,9 @@ function updateStateUI(state) {
 
     // Update Risk Flags
     const flags = obs.identified_flags || [];
+    elements.flagsContainer.innerHTML = '';
+    
     if (flags.length > 0) {
-        elements.flagsContainer.innerHTML = '';
         flags.forEach(f => {
             const badge = document.createElement('div');
             badge.className = `flag-badge sev-${(f.severity || 'medium').toLowerCase()}`;
@@ -140,6 +141,11 @@ function updateStateUI(state) {
             `;
             elements.flagsContainer.appendChild(badge);
         });
+    } else {
+        const hint = document.createElement('p');
+        hint.className = 'empty-hint';
+        hint.textContent = 'No risks detected in this analysis.';
+        elements.flagsContainer.appendChild(hint);
     }
 
     // Action Controls
